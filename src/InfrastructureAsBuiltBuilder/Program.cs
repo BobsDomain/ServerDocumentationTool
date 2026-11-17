@@ -34,7 +34,7 @@ namespace IABB.App
 
     internal static class AppInfo
     {
-        internal const string ProductName = "Infrastructure As-Built Builder";
+        internal const string ProductName = "Server Documentation Tool";
 
         internal static Version Version
         {

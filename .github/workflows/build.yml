@@ -79,8 +79,8 @@ jobs:
           $zip = "dist/InfrastructureAsBuiltBuilder_v$v.zip"
           $notes = "Docs/v$v-ReleaseNotes.md"
           if (Test-Path $notes) {
-            gh release create $env:GITHUB_REF_NAME $zip "$zip.sha256" --title "Infrastructure As-Built Builder v$v" --notes-file $notes
+            gh release create $env:GITHUB_REF_NAME $zip "$zip.sha256" --title "Server Documentation Tool v$v" --notes-file $notes
           } else {
-            gh release create $env:GITHUB_REF_NAME $zip "$zip.sha256" --title "Infrastructure As-Built Builder v$v" --generate-notes
+            gh release create $env:GITHUB_REF_NAME $zip "$zip.sha256" --title "Server Documentation Tool v$v" --generate-notes
           }
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

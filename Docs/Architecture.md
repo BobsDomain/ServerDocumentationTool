@@ -1,4 +1,4 @@
-# Infrastructure As-Built Builder: Architecture (v1.0.0)
+# Server Documentation Tool: Architecture (v1.0.1)
 
 ## Components
 | Component | Technology | Role |

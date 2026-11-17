@@ -1,6 +1,6 @@
 # Engine smoke test on Windows PowerShell 5.1 (GitHub Actions windows runner, or any Windows PC):
 #   1. imports every engine module in the app's order and checks the functions the app and the legacy launcher need;
-#   2. checks local-server recognition (short name and FQDN) - the v1.0.0 fix;
+#   2. checks local-server recognition (short name, FQDN, DNS host name, trailing dot);
 #   3. builds a DOCX from a result containing XML-illegal control characters and checks the XML is valid;
 #   4. runs a REAL collection of this machine through the app entry point (Invoke-IABBAppServer) and validates the JSON, DOCX and HTML.
 # Usage:  powershell -File .\tests\Test-EngineSmoke.ps1 [-OutputPath C:\Temp\IABB_Smoke]
@@ -72,7 +72,8 @@ if ($o.DocName) {
     if ($e) { Fail ("local DOCX is not valid XML: " + $e) } else { Pass ("local DOCX valid: " + $o.DocName) }
     $x = $null; Add-Type -AssemblyName System.IO.Compression.FileSystem
     $z = [System.IO.Compression.ZipFile]::OpenRead((Join-Path $OutputPath $o.DocName)); try { $sr = New-Object System.IO.StreamReader($z.GetEntry('word/document.xml').Open()); $x = $sr.ReadToEnd(); $sr.Dispose() } finally { $z.Dispose() }
-    if ($x -match 'Infrastructure As-Built Builder v1\.0\.0') { Pass 'DOCX shows version 1.0.0' } else { Fail 'DOCX does not show version 1.0.0' }
+    $ver = (Get-Content (Join-Path $root 'VERSION.txt') -Raw).Trim()
+    if ($x -match ('Server Documentation Tool v' + [regex]::Escape($ver))) { Pass ('DOCX shows Server Documentation Tool v' + $ver) } else { Fail ('DOCX does not show Server Documentation Tool v' + $ver) }
 } else { Fail ("no DOCX produced: " + $o.ReportError) }
 
 $html = Join-Path $OutputPath 'CI_Server_Summary.html'

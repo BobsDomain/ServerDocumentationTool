@@ -1,4 +1,4 @@
-# Infrastructure As-Built Builder: Roadmap
+# Server Documentation Tool: Roadmap
 
 Source: v0.9.9g code review (2026-11-16). Each version is built only after the owner approves its scope.
 
@@ -16,7 +16,7 @@ Source: v0.9.9g code review (2026-11-16). Each version is built only after the o
 Reason: they added a lot of length to every DC/DNS report without adding value to a per-server as-built document.
 
 ## Product goal
-Work like SYDI-Server (one as-built document per server) but better: clearer status, honest "Not collected" reporting, physical/virtual clarity, and concise reports.
+One concise, accurate as-built document per server: clear collection status, honest "Not collected" reporting, physical/virtual clarity, and no padding.
 
 ## Proposed: v0.9.9i, report content (needs owner decision on each item)
 Candidates that are still open (data already collected unless noted):
@@ -29,6 +29,7 @@ Candidates that are still open (data already collected unless noted):
 - ISO dates for OS install/last boot.
 
 - **v0.9.9i:** locked as baseline 2026-11-17 after the field test on 153 servers.
+- **v1.0.1:** renamed to Server Documentation Tool (visible names; file names kept for update compatibility).
 - **v1.0.0:** the Windows app (C# .NET Framework 4.8, built by GitHub Actions): Cancel, parallel collection, hard per-server time limit, update button, reusable remoting session per server, local server recognised by FQDN.
 
 ## Candidates after v1.0.0 (owner approval needed)

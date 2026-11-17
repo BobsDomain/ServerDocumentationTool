@@ -1,6 +1,6 @@
 {
-  "TemplateName": "Default Infrastructure As-Built Template",
-  "TemplateVersion": "1.0.0",
+  "TemplateName": "Default Server Documentation Template",
+  "TemplateVersion": "1.0.1",
   "Branding": {
     "PrimaryColor": "0F172A",
     "AccentColor": "1E3A8A",

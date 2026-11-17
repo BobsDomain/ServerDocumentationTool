@@ -1,4 +1,4 @@
-# IABB.AppHost - Infrastructure As-Built Builder v1.0.0
+# IABB.AppHost - Server Documentation Tool v1.0.1
 # Entry points used by the Windows app (InfrastructureAsBuiltBuilder.exe).
 # The app runs these inside a PowerShell runspace pool, one server per pipeline. Progress messages are sent on the
 # Information stream with the tag 'IABBProgress'. The legacy PowerShell launcher (Start-InfrastructureAsBuiltBuilder.ps1)

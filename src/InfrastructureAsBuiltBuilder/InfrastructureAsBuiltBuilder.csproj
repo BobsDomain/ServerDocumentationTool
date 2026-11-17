@@ -4,7 +4,7 @@
     <AssemblyName>InfrastructureAsBuiltBuilder</AssemblyName>
     <RootNamespace>IABB.App</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <AssemblyTitle>Infrastructure As-Built Builder</AssemblyTitle>
+    <AssemblyTitle>Server Documentation Tool</AssemblyTitle>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="System.Windows.Forms" />

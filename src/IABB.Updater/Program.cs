@@ -67,7 +67,7 @@ namespace IABB.Updater
                 Log("FAILED: " + ex);
                 MessageBox.Show("The update could not be completed:" + Environment.NewLine + ex.Message + Environment.NewLine + Environment.NewLine +
                     "Log: " + LogPath + Environment.NewLine + "You can download the release manually from:" + Environment.NewLine + ReleasesPage,
-                    "Infrastructure As-Built Builder - Update", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    "Server Documentation Tool - Update", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 try
                 {
                     if (!string.IsNullOrEmpty(start) && File.Exists(start)) Process.Start(new ProcessStartInfo(start) { UseShellExecute = true });

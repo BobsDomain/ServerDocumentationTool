@@ -1,4 +1,4 @@
-# IABB.UI - Infrastructure As-Built Builder v1.0.0
+# IABB.UI - Server Documentation Tool v1.0.1
 function Start-IABBApplication{
 param([string]$ApplicationRoot)
 Add-Type -AssemblyName System.Windows.Forms;Add-Type -AssemblyName System.Drawing
@@ -10,9 +10,9 @@ $appCap=Get-CfgInt 'ApplicationDisplayCap' 200
 $cimTimeout=Get-CfgInt 'CimOperationTimeoutSec' 180
 $sectionTimeout=Get-CfgInt 'SectionTimeoutSec' 300
 $probeTimeout=Get-CfgInt 'TimeoutSeconds' 30
-$form=New-Object Windows.Forms.Form;$form.Text="Infrastructure As-Built Builder v$($config.Version)";$form.Size=New-Object Drawing.Size(1260,860);$form.StartPosition='CenterScreen';$form.Font=New-Object Drawing.Font('Segoe UI',9)
+$form=New-Object Windows.Forms.Form;$form.Text="Server Documentation Tool v$($config.Version)";$form.Size=New-Object Drawing.Size(1260,860);$form.StartPosition='CenterScreen';$form.Font=New-Object Drawing.Font('Segoe UI',9)
 function Add-C($c){$form.Controls.Add($c)}
-$title=New-Object Windows.Forms.Label;$title.Text='Infrastructure As-Built Builder';$title.Font=New-Object Drawing.Font('Segoe UI',18,[Drawing.FontStyle]::Bold);$title.Location=New-Object Drawing.Point(20,12);$title.Size=New-Object Drawing.Size(760,34);Add-C $title
+$title=New-Object Windows.Forms.Label;$title.Text='Server Documentation Tool';$title.Font=New-Object Drawing.Font('Segoe UI',18,[Drawing.FontStyle]::Bold);$title.Location=New-Object Drawing.Point(20,12);$title.Size=New-Object Drawing.Size(760,34);Add-C $title
 $lblClient=New-Object Windows.Forms.Label;$lblClient.Text='Client Name';$lblClient.Location=New-Object Drawing.Point(25,58);$lblClient.Size=New-Object Drawing.Size(90,22);Add-C $lblClient
 $txtClient=New-Object Windows.Forms.TextBox;$txtClient.Location=New-Object Drawing.Point(120,55);$txtClient.Size=New-Object Drawing.Size(300,24);$txtClient.Text='Client';Add-C $txtClient
 $lblOutput=New-Object Windows.Forms.Label;$lblOutput.Text='Output Path';$lblOutput.Location=New-Object Drawing.Point(25,88);$lblOutput.Size=New-Object Drawing.Size(90,22);Add-C $lblOutput
@@ -55,7 +55,7 @@ $btnStart.Add_Click({try{$servers=@(Get-IncludedServers);if($servers.Count -eq 0
 $script:runLogPath=Join-Path $run.Root 'IABB_Run.log'
 Add-UILog "Created output folder: $($run.Root)"
 $cred=Get-CredIfNeeded;$useDcom=[bool]$chkDcom.Checked
-Add-UILog ("Infrastructure As-Built Builder v{0} - run started by {1}\{2} on {3}" -f $config.Version,$env:USERDOMAIN,$env:USERNAME,$env:COMPUTERNAME)
+Add-UILog ("Server Documentation Tool v{0} - run started by {1}\{2} on {3}" -f $config.Version,$env:USERDOMAIN,$env:USERNAME,$env:COMPUTERNAME)
 Add-UILog ("Client: {0} | Credentials: {1} | DCOM fallback: {2} | CIM query limit {3}s | step limit {4}s" -f $run.ClientName,$(if($cred){$cred.UserName}else{'current user'}),$useDcom,$cimTimeout,$sectionTimeout)
 Add-UILog ("Servers ({0}): {1}" -f $servers.Count,((@($servers|%{ $_.ServerName })) -join ', '))
 $results=@();$i=0;$nComplete=0;$nPartial=0;$nFailed=0

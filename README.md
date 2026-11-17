@@ -1,19 +1,21 @@
-# Infrastructure As-Built Builder (ServerDocumentationTool)
+# Server Documentation Tool
 
-A Windows app that produces SYDI-style as-built documentation for Windows servers:
+A Windows app that produces as-built documentation for Windows servers:
 
 - one Word document per server (`SERVER_AsBuilt.docx`, native OpenXML; Word is not needed),
 - an HTML run summary,
 - one RawData JSON file per server with everything collected,
 - a run log (`IABB_Run.log`).
 
-Servers only. v1.0.0 is the first app release, built on the field-tested PowerShell engine v0.9.9i.
+Servers only. The app was first released as v1.0.0, built on the field-tested PowerShell engine v0.9.9i.
+
+The program and download files keep the name `InfrastructureAsBuiltBuilder`, so existing installations can update themselves. The `IABB` prefix in the code is the internal name.
 
 ## Download and install
 
 1. Open **[Releases](https://github.com/CPSDomain/ServerDocumentationTool/releases)** and download `InfrastructureAsBuiltBuilder_v<version>.zip`. The `.sha256` file next to it is its checksum.
 2. Right-click the ZIP, choose **Properties**, tick **Unblock** and click OK. This stops Windows marking every extracted file as "from the internet".
-3. Extract it to a folder you can write to, for example `C:\Tools\InfrastructureAsBuiltBuilder`. Avoid `C:\Program Files`, because the update button needs write access to the folder.
+3. Extract it to a folder you can write to, for example `C:\Tools\ServerDocumentationTool`. Avoid `C:\Program Files`, because the update button needs write access to the folder.
 4. Run **InfrastructureAsBuiltBuilder.exe**. It asks for administrator rights.
 
 **First run:** the app is not code-signed, so Windows SmartScreen may show "Windows protected your PC". Click **More info**, then **Run anyway**. Some corporate antivirus/EDR products block unsigned applications; if that happens, ask for an allow-list entry, or use the PowerShell launcher below.

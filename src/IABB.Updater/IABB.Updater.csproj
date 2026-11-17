@@ -3,7 +3,7 @@
     <OutputType>WinExe</OutputType>
     <AssemblyName>IABB.Updater</AssemblyName>
     <RootNamespace>IABB.Updater</RootNamespace>
-    <AssemblyTitle>Infrastructure As-Built Builder Updater</AssemblyTitle>
+    <AssemblyTitle>Server Documentation Tool Updater</AssemblyTitle>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="System.Windows.Forms" />

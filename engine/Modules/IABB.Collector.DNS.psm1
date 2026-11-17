@@ -1,4 +1,4 @@
-# IABB.Collector.DNS - Infrastructure As-Built Builder v1.0.0
+# IABB.Collector.DNS - Server Documentation Tool v1.0.1
 # v0.9.9h: runs on the target DNS server via WinRM; falls back to RSAT on this PC with a CIM session that carries the supplied credentials.
 function Invoke-IABBDNSCollection {
     param([string]$ComputerName,[Management.Automation.PSCredential]$Credential,[int]$TimeoutSec=300,[bool]$UseRemoting=$true)

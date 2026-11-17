@@ -93,7 +93,7 @@ namespace IABB.App
             btnCred.Click += (s, e) => PromptCredential();
 
             var lblOutput = new Label { Text = "Output Path", Location = new Point(25, 88), Size = new Size(90, 22) };
-            txtOutput.Location = new Point(120, 85); txtOutput.Size = new Size(610, 24); txtOutput.Text = config.GetString("DefaultOutputRoot", @"C:\InfrastructureAsBuilt");
+            txtOutput.Location = new Point(120, 85); txtOutput.Size = new Size(610, 24); txtOutput.Text = config.GetString("DefaultOutputRoot", @"C:\ServerDocumentation");
             btnBrowse.Text = "Browse..."; btnBrowse.Location = new Point(736, 83); btnBrowse.Size = new Size(90, 26);
             btnBrowse.Click += (s, e) => BrowseOutput();
             chkDcom.Text = "Enable DCOM fallback"; chkDcom.Location = new Point(840, 85); chkDcom.Size = new Size(170, 24); chkDcom.Checked = config.GetBool("EnableDcomFallback", true);
