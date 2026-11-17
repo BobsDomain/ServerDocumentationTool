@@ -1,5 +1,5 @@
-# IABB.Core - Server Documentation Tool v1.0.1
-function Get-IABBConfig { param([Parameter(Mandatory)][string]$ApplicationRoot) $p=Join-Path $ApplicationRoot 'Config\appsettings.json'; if(Test-Path $p){Get-Content $p -Raw|ConvertFrom-Json}else{[pscustomobject]@{Version='1.0.1';DefaultOutputRoot='C:\ServerDocumentation';ServerOperatingSystemFilter='Windows Server';TimeoutSeconds=30;CimOperationTimeoutSec=180;SectionTimeoutSec=300;IncludeWorkstations=$false;EnableDcomFallback=$true;GroupMemberDisplayCap=15;ApplicationDisplayCap=200;CertificateExpiringDays=60}} }
+# IABB.Core - Server Documentation Tool v1.0.2
+function Get-IABBConfig { param([Parameter(Mandatory)][string]$ApplicationRoot) $p=Join-Path $ApplicationRoot 'Config\appsettings.json'; if(Test-Path $p){Get-Content $p -Raw|ConvertFrom-Json}else{[pscustomobject]@{Version='1.0.2';DefaultOutputRoot='C:\ServerDocumentation';ServerOperatingSystemFilter='Windows Server';TimeoutSeconds=30;CimOperationTimeoutSec=180;SectionTimeoutSec=300;IncludeWorkstations=$false;EnableDcomFallback=$true;GroupMemberDisplayCap=15;ApplicationDisplayCap=200;CertificateExpiringDays=60}} }
 function ConvertTo-IABBSafeFileName { param([string]$Name) if([string]::IsNullOrWhiteSpace($Name)){'Unknown'}else{(($Name -replace '[\\/:*?"<>|]','_') -replace '\s+','_')} }
 function Save-IABBTextFile { param([Parameter(Mandatory)][string]$Path,[AllowNull()][string]$Content) $parent=Split-Path -Parent $Path; if($parent -and -not(Test-Path $parent)){New-Item -Path $parent -ItemType Directory -Force|Out-Null}; [IO.File]::WriteAllText($Path,[string]$Content,(New-Object Text.UTF8Encoding($false))) }
 function New-IABBRunFolder { param([string]$OutputRoot,[string]$ClientName) if([string]::IsNullOrWhiteSpace($OutputRoot)){$OutputRoot='C:\ServerDocumentation'}; if([string]::IsNullOrWhiteSpace($ClientName)){$ClientName='Client'}; $safe=ConvertTo-IABBSafeFileName $ClientName; $root=Join-Path $OutputRoot ($safe+'_AsBuilt_'+(Get-Date -Format 'yyyyMMdd_HHmmss')); $raw=Join-Path $root 'RawData'; New-Item -Path $raw -ItemType Directory -Force|Out-Null; [pscustomobject]@{Root=$root;RawData=$raw;ClientName=$safe} }
@@ -58,7 +58,7 @@ function New-IABBFailedResult {
     param([string]$ComputerName,[string]$Message)
     $now=(Get-Date).ToString('s')
     $st=[pscustomobject]@{Status='Failed';Transport='None';Reachable=$false;PingOk=$false;Authorized=$false;Classification='Unexpected error during collection';SectionsOk=0;SectionsFailed=0;StepsTimedOut=0;Detail=$Message}
-    [pscustomobject]@{SchemaVersion='1.0.1';ComputerName=$ComputerName;CollectionStarted=$now;CollectionFinished=$now;Success=$false;Error=$Message;CollectionStatus=$st;SectionTimings=@();RolesDetected=@();RoleData=[ordered]@{};CollectionWarnings=@('Collection stopped unexpectedly: '+$Message)}
+    [pscustomobject]@{SchemaVersion='1.0.2';ComputerName=$ComputerName;CollectionStarted=$now;CollectionFinished=$now;Success=$false;Error=$Message;CollectionStatus=$st;SectionTimings=@();RolesDetected=@();RoleData=[ordered]@{};CollectionWarnings=@('Collection stopped unexpectedly: '+$Message)}
 }
 # v0.9.9h: run a role query (AD DS / DNS / DHCP) against the TARGET server, with the supplied credentials.
 # The script block must accept param($Server,$Cred,$Protocol) and return one object with Success, Error and ModuleMissing.

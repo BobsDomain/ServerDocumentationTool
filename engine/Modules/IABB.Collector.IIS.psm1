@@ -1,4 +1,4 @@
-# IABB.Collector.IIS - Server Documentation Tool v1.0.1
+# IABB.Collector.IIS - Server Documentation Tool v1.0.2
 function Invoke-IABBIISCollection {
     param([string]$ComputerName,[Management.Automation.PSCredential]$Credential,[int]$TimeoutSec=300)
     $sb={

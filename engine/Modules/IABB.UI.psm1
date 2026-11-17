@@ -1,4 +1,4 @@
-# IABB.UI - Server Documentation Tool v1.0.1
+# IABB.UI - Server Documentation Tool v1.0.2
 function Start-IABBApplication{
 param([string]$ApplicationRoot)
 Add-Type -AssemblyName System.Windows.Forms;Add-Type -AssemblyName System.Drawing

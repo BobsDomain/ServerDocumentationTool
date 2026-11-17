@@ -50,11 +50,10 @@ namespace IABB.App
                 paths.Add(p);
             }
             iss.ImportPSModule(paths.ToArray());
-            // v1.0.1: the (min, max, iss, host) overload rejects a null host ("Cannot process argument because the value of
-            // argument 'host' is null" - the v1.0.0 start-up failure). Create the pool from the session state, then set its size.
-            pool = RunspaceFactory.CreateRunspacePool(iss);
-            pool.SetMinRunspaces(1);
-            pool.SetMaxRunspaces(Math.Max(2, maxRunspaces));
+            // v1.0.2: a pool created with an InitialSessionState must be given a host. Without one, Windows PowerShell 5.1 fails
+            // when the pool opens ("Cannot process argument because the value of argument 'host' is null" - the v1.0.0 and
+            // v1.0.1 start-up error). AppPSHost is a minimal, non-interactive host.
+            pool = RunspaceFactory.CreateRunspacePool(1, Math.Max(2, maxRunspaces), iss, new AppPSHost());
             pool.ThreadOptions = PSThreadOptions.UseNewThread;
             pool.Open();
         }

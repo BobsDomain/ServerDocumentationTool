@@ -1,4 +1,4 @@
-# IABB.RoleDetection - Server Documentation Tool v1.0.1
+# IABB.RoleDetection - Server Documentation Tool v1.0.2
 function Invoke-IABBRoleDetection {
     param([Parameter(Mandatory)][object]$ServerData)
     $roles=@(); $notes=@()

@@ -1,4 +1,4 @@
-# IABB.Collector.Applications - Server Documentation Tool v1.0.1
+# IABB.Collector.Applications - Server Documentation Tool v1.0.2
 function Invoke-IABBApplicationCollection {
     param([string]$ComputerName,[Management.Automation.PSCredential]$Credential,[int]$TimeoutSec=300)
     # v0.9.9i: Applications = what Programs and Features shows. System components and updates are kept separately in HiddenEntries (RawData JSON only).

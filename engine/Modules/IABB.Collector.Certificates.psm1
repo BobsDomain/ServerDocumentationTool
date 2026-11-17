@@ -1,4 +1,4 @@
-# IABB.Collector.Certificates - Server Documentation Tool v1.0.1
+# IABB.Collector.Certificates - Server Documentation Tool v1.0.2
 function Invoke-IABBCertificateCollection {
     param([string]$ComputerName,[Management.Automation.PSCredential]$Credential,[int]$TimeoutSec=300)
     $r=[ordered]@{Success=$false;ComputerName=$ComputerName;Certificates=@();Summary=$null;Error=$null;TimedOut=$false}

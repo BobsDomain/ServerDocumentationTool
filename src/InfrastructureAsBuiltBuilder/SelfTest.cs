@@ -26,6 +26,9 @@ namespace IABB.App
                 if (string.IsNullOrWhiteSpace(outDir)) outDir = Path.Combine(Path.GetTempPath(), "ServerDocumentationTool_SelfTest");
                 Directory.CreateDirectory(outDir);
                 write(AppInfo.ProductName + " " + AppInfo.VersionText + " self-test, engine folder " + AppInfo.EngineDirectory);
+                write("OS " + Environment.OSVersion.VersionString + ", 64-bit process: " + Environment.Is64BitProcess + ", CLR " + Environment.Version
+                    + ", System.Management.Automation " + typeof(System.Management.Automation.PowerShell).Assembly.GetName().Version
+                    + " from " + typeof(System.Management.Automation.PowerShell).Assembly.Location);
 
                 using (var engine = new EngineHost(AppInfo.EngineDirectory, 4))
                 {

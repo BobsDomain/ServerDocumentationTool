@@ -1,4 +1,4 @@
-# IABB.Collector.ADDS - Server Documentation Tool v1.0.1
+# IABB.Collector.ADDS - Server Documentation Tool v1.0.2
 # v0.9.9h: collects from the TARGET domain controller (was: the operator PC's own domain) and uses the supplied credentials.
 function Invoke-IABBADDSCollection {
     param([string]$ComputerName,[Management.Automation.PSCredential]$Credential,[int]$TimeoutSec=300,[bool]$UseRemoting=$true)

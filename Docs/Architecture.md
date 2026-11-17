@@ -1,4 +1,4 @@
-# Server Documentation Tool: Architecture (v1.0.1)
+# Server Documentation Tool: Architecture (v1.0.2)
 
 ## Components
 | Component | Technology | Role |
@@ -9,7 +9,7 @@
 | `Engine\Start-InfrastructureAsBuiltBuilder.ps1` | PowerShell + `IABB.UI.psm1` | Legacy launcher / fallback when the exe is blocked |
 
 ## How the app runs the engine
-- `EngineHost` opens one runspace pool (Windows PowerShell 5.1 from the OS, process-scope execution policy Bypass). Every engine module in `EngineHost.ModuleOrder` is imported, and the functions the app needs are verified at start-up.
+- `EngineHost` opens one runspace pool (Windows PowerShell 5.1 from the OS, process-scope execution policy Bypass) with the app's own minimal PowerShell host, `AppPSHost` (required for a pool built from an InitialSessionState). Every engine module in `EngineHost.ModuleOrder` is imported, and the functions the app needs are verified at start-up.
 - `AssessmentRunner` starts one pipeline per server, `Invoke-IABBAppServer` (IABB.AppHost):
   - collection, then RawData JSON, then DOCX, then a summary object back to the app;
   - a `SemaphoreSlim` limits servers at once (`ParallelServers`);
