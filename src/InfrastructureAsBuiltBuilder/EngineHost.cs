@@ -50,7 +50,11 @@ namespace IABB.App
                 paths.Add(p);
             }
             iss.ImportPSModule(paths.ToArray());
-            pool = RunspaceFactory.CreateRunspacePool(1, Math.Max(2, maxRunspaces), iss, null);
+            // v1.0.1: the (min, max, iss, host) overload rejects a null host ("Cannot process argument because the value of
+            // argument 'host' is null" - the v1.0.0 start-up failure). Create the pool from the session state, then set its size.
+            pool = RunspaceFactory.CreateRunspacePool(iss);
+            pool.SetMinRunspaces(1);
+            pool.SetMaxRunspaces(Math.Max(2, maxRunspaces));
             pool.ThreadOptions = PSThreadOptions.UseNewThread;
             pool.Open();
         }

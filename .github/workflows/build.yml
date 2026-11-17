@@ -1,7 +1,8 @@
 name: build
 
 # Every push and pull request: PowerShell syntax check, PSScriptAnalyzer (report only), engine smoke test with a
-# real local collection, compile the app and updater, package the ZIP (download it from the run's Artifacts).
+# real local collection, compile the app and updater, app self-test (the exe's own engine host collecting this machine),
+# package the ZIP (download it from the run's Artifacts).
 # Pushing a tag such as v1.0.0 also publishes a GitHub Release, which the app's update button installs.
 on:
   push:
@@ -58,6 +59,17 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           dotnet build src/IABB.Updater/IABB.Updater.csproj -c Release -p:Version=${{ steps.ver.outputs.version }}
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: App self-test (the app's own engine host, real local collection)
+        shell: pwsh
+        run: |
+          $bin = 'src/InfrastructureAsBuiltBuilder/bin/Release/net48'
+          Copy-Item engine (Join-Path $bin 'Engine') -Recurse -Force
+          $out = Join-Path $env:RUNNER_TEMP 'AppSelfTest'
+          $p = Start-Process -FilePath (Join-Path $bin 'InfrastructureAsBuiltBuilder.exe') -ArgumentList '--selftest', ('"' + $out + '"') -Wait -PassThru
+          if (Test-Path (Join-Path $out 'selftest.log')) { Get-Content (Join-Path $out 'selftest.log') } else { Write-Host 'selftest.log was not written' }
+          Write-Host "Self-test exit code: $($p.ExitCode)"
+          if ($p.ExitCode -ne 0) { exit 1 }
 
       - name: Package
         shell: pwsh

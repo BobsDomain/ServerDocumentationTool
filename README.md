@@ -101,7 +101,7 @@ If the app is blocked, the same engine still runs as before: `Engine\Start-Infra
 | `engine/` | PowerShell engine (modules, config, template, samples, legacy launcher) |
 | `src/InfrastructureAsBuiltBuilder/` | The app (C#, .NET Framework 4.8, WinForms) |
 | `src/IABB.Updater/` | The updater |
-| `tests/` | Syntax check and engine smoke test (Windows PowerShell 5.1) |
+| `tests/` | Syntax check and engine smoke test (Windows PowerShell 5.1); the app itself also has `--selftest <folder>`, run by CI |
 | `build/Package.ps1` | Builds the release ZIP and its SHA256 |
 | `.github/workflows/build.yml` | GitHub Actions: syntax check, analyzer, smoke test (real local collection), build, package; publishes a Release for `v*` tags |
 | `Docs/` | Architecture, roadmap, release notes |

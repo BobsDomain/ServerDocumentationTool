@@ -7,10 +7,14 @@ namespace IABB.App
     internal static class Program
     {
         [STAThread]
-        private static void Main()
+        private static int Main(string[] args)
         {
             // GitHub requires TLS 1.2; older Windows builds do not enable it by default for .NET Framework apps.
             try { ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12; } catch { }
+
+            // Headless self-test (used by GitHub Actions): InfrastructureAsBuiltBuilder.exe --selftest <output folder>
+            if (args != null && args.Length > 0 && string.Equals(args[0], "--selftest", StringComparison.OrdinalIgnoreCase))
+                return SelfTest.Run(args.Length > 1 ? args[1] : null);
 
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
@@ -18,6 +22,7 @@ namespace IABB.App
             Application.ThreadException += (s, e) => ShowError(e.Exception);
             AppDomain.CurrentDomain.UnhandledException += (s, e) => ShowError(e.ExceptionObject as Exception);
             Application.Run(new MainForm());
+            return 0;
         }
 
         internal static void ShowError(Exception ex)
