@@ -1,0 +1,10 @@
+{
+  "TemplateName": "Default Infrastructure As-Built Template",
+  "TemplateVersion": "1.0.0",
+  "Branding": {
+    "PrimaryColor": "0F172A",
+    "AccentColor": "1E3A8A",
+    "Font": "Segoe UI"
+  },
+  "OutputModel": "OneDocxPerServer"
+}

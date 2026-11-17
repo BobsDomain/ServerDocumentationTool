@@ -1,0 +1,86 @@
+name: build
+
+# Every push and pull request: PowerShell syntax check, PSScriptAnalyzer (report only), engine smoke test with a
+# real local collection, compile the app and updater, package the ZIP (download it from the run's Artifacts).
+# Pushing a tag such as v1.0.0 also publishes a GitHub Release, which the app's update button installs.
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version
+        id: ver
+        shell: pwsh
+        run: |
+          $v = (Get-Content VERSION.txt -Raw).Trim()
+          if ($v -notmatch '^\d+\.\d+\.\d+$') { throw "VERSION.txt must contain a version like 1.0.0 (found '$v')" }
+          if ($env:GITHUB_REF -like 'refs/tags/v*') {
+            $t = $env:GITHUB_REF_NAME.TrimStart('v')
+            if ($t -ne $v) { throw "Tag $($env:GITHUB_REF_NAME) does not match VERSION.txt ($v)" }
+          }
+          "version=$v" >> $env:GITHUB_OUTPUT
+          Write-Host "Version $v"
+
+      - name: PowerShell syntax check (Windows PowerShell 5.1)
+        shell: powershell
+        run: .\tests\Test-EngineSyntax.ps1
+
+      - name: PSScriptAnalyzer (report only)
+        shell: powershell
+        continue-on-error: true
+        run: |
+          Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -Scope CurrentUser | Out-Null
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          Install-Module PSScriptAnalyzer -Scope CurrentUser -Force
+          $r = Invoke-ScriptAnalyzer -Path .\engine -Recurse -Severity Error, Warning
+          $r | Sort-Object Severity, ScriptName, Line | Format-Table Severity, RuleName, ScriptName, Line -AutoSize | Out-String -Width 220 | Write-Host
+          Write-Host ("{0} error(s), {1} warning(s)" -f @($r | Where-Object Severity -eq 'Error').Count, @($r | Where-Object Severity -eq 'Warning').Count)
+
+      - name: Engine smoke test (real local collection)
+        shell: powershell
+        run: .\tests\Test-EngineSmoke.ps1 -OutputPath "$env:RUNNER_TEMP\IABB_Smoke"
+
+      - name: Build app and updater
+        shell: pwsh
+        run: |
+          dotnet build src/InfrastructureAsBuiltBuilder/InfrastructureAsBuiltBuilder.csproj -c Release -p:Version=${{ steps.ver.outputs.version }}
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build src/IABB.Updater/IABB.Updater.csproj -c Release -p:Version=${{ steps.ver.outputs.version }}
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Package
+        shell: pwsh
+        run: ./build/Package.ps1 -Version ${{ steps.ver.outputs.version }}
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: InfrastructureAsBuiltBuilder_v${{ steps.ver.outputs.version }}
+          path: dist/*
+
+      - name: Publish GitHub Release (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $v = '${{ steps.ver.outputs.version }}'
+          $zip = "dist/InfrastructureAsBuiltBuilder_v$v.zip"
+          $notes = "Docs/v$v-ReleaseNotes.md"
+          if (Test-Path $notes) {
+            gh release create $env:GITHUB_REF_NAME $zip "$zip.sha256" --title "Infrastructure As-Built Builder v$v" --notes-file $notes
+          } else {
+            gh release create $env:GITHUB_REF_NAME $zip "$zip.sha256" --title "Infrastructure As-Built Builder v$v" --generate-notes
+          }
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

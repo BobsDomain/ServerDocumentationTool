@@ -1,0 +1,16 @@
+# --- build output ---
+bin/
+obj/
+dist/
+.vs/
+*.user
+*.suo
+
+# --- CLIENT DATA: never commit run output (this repository is public) ---
+*_AsBuilt_*/
+RawData/
+IABB_Run.log
+*_AsBuilt.docx
+*_Server_Summary.html
+*.docx
+*.zip

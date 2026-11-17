@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <AssemblyName>InfrastructureAsBuiltBuilder</AssemblyName>
+    <RootNamespace>IABB.App</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AssemblyTitle>Infrastructure As-Built Builder</AssemblyTitle>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Web.Extensions" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Compile against Windows PowerShell 5.1. At run time the copy installed with Windows (GAC) is used, so the reference assembly is not copied to the output. -->
+    <PackageReference Include="Microsoft.PowerShell.5.1.ReferenceAssemblies" Version="1.0.0" ExcludeAssets="runtime" />
+  </ItemGroup>
+</Project>
