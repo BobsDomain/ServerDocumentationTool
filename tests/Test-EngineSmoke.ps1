@@ -38,7 +38,9 @@ foreach ($f in $required) { if (Get-Command $f -ErrorAction SilentlyContinue) { 
 $cn = $env:COMPUTERNAME
 $dom = ''; try { $dom = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().DomainName } catch {}
 $localNames = @('', '.', 'localhost', $cn, $cn.ToLowerInvariant())
-if ($dom) { $localNames += ($cn + '.' + $dom); $localNames += ($cn + '.' + $dom).ToUpperInvariant() }
+if ($dom) { $localNames += ($cn + '.' + $dom); $localNames += ($cn + '.' + $dom).ToUpperInvariant() } else { Write-Host '  (no DNS domain on this machine - FQDN form tested through the DNS host name below)' }
+$localNames += ($cn + '.')   # trailing dot
+try { $hn = [System.Net.Dns]::GetHostEntry($env:COMPUTERNAME).HostName; if ($hn) { $localNames += $hn } } catch {}
 foreach ($n in $localNames) { if (Test-IABBIsLocal $n) { Pass ("local: '" + $n + "'") } else { Fail ("not recognised as local: '" + $n + "'") } }
 foreach ($n in @('NOT-A-REAL-HOST-1234', 'server01.contoso.local')) { if (-not (Test-IABBIsLocal $n)) { Pass ("remote: '" + $n + "'") } else { Fail ("wrongly treated as local: '" + $n + "'") } }
 

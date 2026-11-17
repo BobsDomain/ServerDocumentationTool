@@ -19,7 +19,7 @@ function Get-IABBLocalNames {
     }
     $script:IABBLocalNames
 }
-function Test-IABBIsLocal { param([string]$ComputerName) if([string]::IsNullOrWhiteSpace($ComputerName)){ return $true }; $n=$ComputerName.Trim().TrimEnd('.').ToLowerInvariant(); return (@(Get-IABBLocalNames) -contains $n) }
+function Test-IABBIsLocal { param([string]$ComputerName) if([string]::IsNullOrWhiteSpace($ComputerName)){ return $true }; $n=$ComputerName.Trim().ToLowerInvariant(); if($n -ne '.'){ $n=$n.TrimEnd('.') }; return (@(Get-IABBLocalNames) -contains $n) }
 # v1.0.0: one reusable PowerShell remoting session per server. Every WinRM step (local accounts, applications, certificates, IIS, SQL, role queries) reuses it.
 # In the v0.9.9i field test, opening a new connection cost about 84 s per step on slow hosts. If no session is registered, or it is broken, each step connects on its own as before.
 $script:IABBSessions=@{}
