@@ -1,12 +1,12 @@
 <Project>
   <!-- Shared settings for the app and the updater. CI passes -p:Version=<VERSION.txt>; the value below is the default for local builds. -->
   <PropertyGroup>
-    <Version>1.0.2</Version>
+    <Version>1.0.3</Version>
     <TargetFramework>net48</TargetFramework>
     <LangVersion>7.3</LangVersion>
-    <Company>CPSDomain</Company>
+    <Company>bobsdomain</Company>
     <Product>Server Documentation Tool</Product>
-    <Copyright>CPSDomain</Copyright>
+    <Copyright>bobsdomain</Copyright>
     <PlatformTarget>AnyCPU</PlatformTarget>
     <Prefer32Bit>false</Prefer32Bit>
     <Deterministic>true</Deterministic>

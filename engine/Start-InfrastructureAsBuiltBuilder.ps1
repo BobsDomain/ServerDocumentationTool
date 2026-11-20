@@ -1,4 +1,4 @@
-<# Server Documentation Tool Version: 1.0.2 (legacy PowerShell launcher; the app is InfrastructureAsBuiltBuilder.exe) #>
+<# Server Documentation Tool Version: 1.0.3 (legacy PowerShell launcher; the app is InfrastructureAsBuiltBuilder.exe) #>
 [CmdletBinding()]
 param()
 $ErrorActionPreference = 'Stop'

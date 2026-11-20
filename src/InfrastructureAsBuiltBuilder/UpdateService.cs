@@ -27,7 +27,21 @@ namespace IABB.App
     /// </summary>
     internal static class UpdateService
     {
-        internal const string DefaultRepository = "CPSDomain/ServerDocumentationTool";
+        internal const string DefaultRepository = "bobsdomain/ServerDocumentationTool";
+
+        // v1.0.3: the repository moved from CPSDomain to bobsdomain. Installed copies keep their own appsettings.json when they
+        // update, so the old value is translated here; updates never come from the old location, even if someone re-creates it.
+        private static readonly string[] RetiredRepositories = { "CPSDomain/ServerDocumentationTool" };
+
+        internal static string ResolveRepository(string configured)
+        {
+            string repo = string.IsNullOrWhiteSpace(configured) ? DefaultRepository : configured.Trim().Trim('/');
+            foreach (string old in RetiredRepositories)
+            {
+                if (string.Equals(repo, old, StringComparison.OrdinalIgnoreCase)) return DefaultRepository;
+            }
+            return repo;
+        }
         internal const string AssetPrefix = "InfrastructureAsBuiltBuilder_";
 
         internal static string ReleasesPage(string repo)

@@ -29,11 +29,14 @@ Candidates that are still open (data already collected unless noted):
 - ISO dates for OS install/last boot.
 
 - **v0.9.9i:** locked as baseline 2026-11-17 after the field test on 153 servers.
+- **v1.0.3:** repository moved to bobsdomain/ServerDocumentationTool; installed copies are redirected (the old setting is translated).
 - **v1.0.2:** fixes the app's engine start-up ('host' is null): the runspace pool now gets the app's own PowerShell host.
 - **v1.0.1:** renamed to Server Documentation Tool (visible names; file names kept for update compatibility).
 - **v1.0.0:** the Windows app (C# .NET Framework 4.8, built by GitHub Actions): Cancel, parallel collection, hard per-server time limit, update button, reusable remoting session per server, local server recognised by FQDN.
 
 ## Candidates after v1.0.0 (owner approval needed)
+- "Update from file...": install a downloaded release ZIP (SHA256-checked) on servers without internet.
+- DNS step on a DC timing out at 300 s (RFBCXSDCS03): measure Get-DnsServerZone / Get-DnsServerForwarder there first.
 - Skip WinRM-only steps immediately on DCOM-only servers; reuse the probe's protocol (one connection attempt per server). (Reusable WinRM session done in v1.0.0.)
 - Domain discovery: skip disabled, stale and cluster-name objects. (The field test had 14 unreachable servers; the owner is to confirm whether they are decommissioned.)
 - Rebuild Reports from RawData (no re-collection).

@@ -13,7 +13,7 @@ The program and download files keep the name `InfrastructureAsBuiltBuilder`, so 
 
 ## Download and install
 
-1. Open **[Releases](https://github.com/CPSDomain/ServerDocumentationTool/releases)** and download `InfrastructureAsBuiltBuilder_v<version>.zip`. The `.sha256` file next to it is its checksum.
+1. Open **[Releases](https://github.com/bobsdomain/ServerDocumentationTool/releases)** and download `InfrastructureAsBuiltBuilder_v<version>.zip`. The `.sha256` file next to it is its checksum.
 2. Right-click the ZIP, choose **Properties**, tick **Unblock** and click OK. This stops Windows marking every extracted file as "from the internet".
 3. Extract it to a folder you can write to, for example `C:\Tools\ServerDocumentationTool`. Avoid `C:\Program Files`, because the update button needs write access to the folder.
 4. Run **InfrastructureAsBuiltBuilder.exe**. It asks for administrator rights.
@@ -87,7 +87,7 @@ The update uses the system proxy. If GitHub cannot be reached, download the ZIP 
 | `EnableDcomFallback` | true | Use DCOM when WinRM fails |
 | `GroupMemberDisplayCap` / `ApplicationDisplayCap` | 15 / 200 | Caps in the report (full lists stay in the JSON) |
 | `ServerOperatingSystemFilter` | Windows Server | Discover Domain filter |
-| `UpdateRepository` | CPSDomain/ServerDocumentationTool | Where the update button looks |
+| `UpdateRepository` | bobsdomain/ServerDocumentationTool | Where the update button looks (the old value CPSDomain/ServerDocumentationTool is read as the new location) |
 | `CheckForUpdatesOnStart` | true | Check for updates when the app starts |
 
 ## PowerShell launcher (fallback)

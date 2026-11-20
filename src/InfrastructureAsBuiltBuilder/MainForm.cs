@@ -581,7 +581,7 @@ namespace IABB.App
 
         private async Task CheckForUpdatesAsync(bool silent)
         {
-            string repo = config.GetString("UpdateRepository", UpdateService.DefaultRepository);
+            string repo = UpdateService.ResolveRepository(config.GetString("UpdateRepository", UpdateService.DefaultRepository));
             btnUpdate.Enabled = false;
             try
             {

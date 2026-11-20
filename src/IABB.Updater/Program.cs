@@ -17,7 +17,7 @@ namespace IABB.Updater
     /// </summary>
     internal static class Program
     {
-        private const string ReleasesPage = "https://github.com/CPSDomain/ServerDocumentationTool/releases";
+        private const string ReleasesPage = "https://github.com/bobsdomain/ServerDocumentationTool/releases";
         private const string PreservedConfig = @"Engine\Config\appsettings.json";
         private static readonly string LogPath = Path.Combine(Path.GetTempPath(), "IABB_Update.log");
 

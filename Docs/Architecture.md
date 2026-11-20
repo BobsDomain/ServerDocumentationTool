@@ -1,4 +1,4 @@
-# Server Documentation Tool: Architecture (v1.0.2)
+# Server Documentation Tool: Architecture (v1.0.3)
 
 ## Components
 | Component | Technology | Role |
@@ -20,7 +20,7 @@
 - `RunLogger` writes the log pane and `IABB_Run.log` (thread-safe).
 
 ## Update flow
-1. `UpdateService.GetLatestRelease` reads `https://api.github.com/repos/<UpdateRepository>/releases/latest` through the system proxy, over TLS 1.2.
+1. `UpdateService.GetLatestRelease` reads `https://api.github.com/repos/<UpdateRepository>/releases/latest` (default `bobsdomain/ServerDocumentationTool`; the retired `CPSDomain/...` value is translated by `ResolveRepository`) through the system proxy, over TLS 1.2.
 2. It needs the assets `InfrastructureAsBuiltBuilder_v<ver>.zip` and `<zip>.sha256`.
 3. If the release is newer than the exe's version, the ZIP and checksum are downloaded to `%TEMP%` and SHA256 is verified.
 4. `IABB.Updater.exe` is copied to `%TEMP%` and started with `--pid --zip --target --start`; the app closes.
