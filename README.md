@@ -39,7 +39,7 @@ The program and download files keep the name `InfrastructureAsBuiltBuilder`, so 
    - type names and click **Add Servers**;
    - **Import from File** (`Engine\Samples\servers.txt` / `servers.csv` show the format);
    - **Add Local Server**;
-   - **Discover Domain**.
+   - **Discover Domain**. It skips disabled computer accounts, cluster name objects, and accounts with no domain logon for 90 days (`DiscoveryStaleDays`); each skipped object is listed in the log with its reason.
 3. Tick **Use alternate credentials** when the targets are in another domain (`DOMAIN\adminuser`). Use **Change...** to re-enter them.
 4. Set **Servers at once** (default 4).
 5. Optionally click **Test Reachability**.
@@ -73,7 +73,14 @@ On start-up the app checks GitHub for a newer release. You can also click **Chec
 3. replaces its files (your `Engine\Config\appsettings.json` is kept; the new defaults are saved as `appsettings.default.json`),
 4. restarts.
 
-The update uses the system proxy. If GitHub cannot be reached, download the ZIP from Releases manually. The updater's log is `%TEMP%\IABB_Update.log`.
+The update uses the system proxy. The updater's log is `%TEMP%\IABB_Update.log`.
+
+**Servers without internet: Update from File...**
+1. On a PC with internet, download `InfrastructureAsBuiltBuilder_v<version>.zip` **and** its `.sha256` file from Releases.
+2. Copy both to the server, into the same folder.
+3. Click **Update from File...** and choose the ZIP.
+
+The checksum is verified before anything changes, and the update then runs exactly like the online one.
 
 ## Settings: `Engine\Config\appsettings.json`
 
@@ -87,6 +94,7 @@ The update uses the system proxy. If GitHub cannot be reached, download the ZIP 
 | `EnableDcomFallback` | true | Use DCOM when WinRM fails |
 | `GroupMemberDisplayCap` / `ApplicationDisplayCap` | 15 / 200 | Caps in the report (full lists stay in the JSON) |
 | `ServerOperatingSystemFilter` | Windows Server | Discover Domain filter |
+| `DiscoveryStaleDays` | 90 | Discover Domain skips accounts with no domain logon for this many days (0 = off); disabled accounts and cluster name objects are always skipped |
 | `UpdateRepository` | bobsdomain/ServerDocumentationTool | Where the update button looks (the old value CPSDomain/ServerDocumentationTool is read as the new location) |
 | `CheckForUpdatesOnStart` | true | Check for updates when the app starts |
 

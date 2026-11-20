@@ -1,4 +1,4 @@
-# IABB.Collector.SQL - Server Documentation Tool v1.0.3
+# IABB.Collector.SQL - Server Documentation Tool v1.1.0
 function Invoke-IABBSqlCollection {
     param([string]$ComputerName,[Management.Automation.PSCredential]$Credential,[int]$TimeoutSec=300)
     $sb={

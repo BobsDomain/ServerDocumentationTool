@@ -48,6 +48,16 @@ jobs:
           $r | Sort-Object Severity, ScriptName, Line | Format-Table Severity, RuleName, ScriptName, Line -AutoSize | Out-String -Width 220 | Write-Host
           Write-Host ("{0} error(s), {1} warning(s)" -f @($r | Where-Object Severity -eq 'Error').Count, @($r | Where-Object Severity -eq 'Warning').Count)
 
+      - name: Install DNS Server role (test fixture for the DNS collector)
+        shell: powershell
+        continue-on-error: true
+        run: |
+          Install-WindowsFeature DNS -IncludeManagementTools | Out-Null
+          Start-Service DNS
+          Add-DnsServerPrimaryZone -Name 'ci.test' -ZoneFile 'ci.test.dns'
+          Set-DnsServerForwarder -IPAddress 192.0.2.53
+          Get-DnsServerZone | Format-Table ZoneName, ZoneType -AutoSize | Out-String | Write-Host
+
       - name: Engine smoke test (real local collection)
         shell: powershell
         run: .\tests\Test-EngineSmoke.ps1 -OutputPath "$env:RUNNER_TEMP\IABB_Smoke"

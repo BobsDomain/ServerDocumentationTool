@@ -1,4 +1,4 @@
-# Server Documentation Tool: Architecture (v1.0.3)
+# Server Documentation Tool: Architecture (v1.1.0)
 
 ## Components
 | Component | Technology | Role |
@@ -32,6 +32,12 @@
 
    Log: `%TEMP%\IABB_Update.log`.
 
+## Update from file (v1.1.0)
+`UpdateService.PrepareLocalPackage`:
+1. checks the release file name and that the `.sha256` file is next to the ZIP;
+2. copies both to `%TEMP%` and verifies SHA256;
+3. the same `IABB.Updater.exe` flow as the online update then runs.
+
 ## Build and release (GitHub Actions, windows-latest)
 1. `VERSION.txt` is checked; it must match the tag on tag builds.
 2. `tests/Test-EngineSyntax.ps1` parses every PowerShell file with Windows PowerShell 5.1.
@@ -56,10 +62,10 @@
 | # | Module | Responsibility | Key functions |
 |---|---|---|---|
 | 1 | IABB.Core | Config, file helpers, server lists, local-name detection, reusable remoting sessions, timed jobs, role-query runner, failed-result record | `Get-IABBConfig`, `Import-IABBServerList`, `ConvertFrom-IABBServerText`, `Test-IABBIsLocal`, `Get-IABBLocalNames`, `Register-/Get-/Unregister-IABBSession`, `Invoke-IABBTimed`, `Invoke-IABBRoleQuery`, `New-IABBFailedResult`, `New-IABBRunFolder`, `Save-IABBTextFile` |
-| 2 | IABB.Discovery | AD server discovery | `Get-IABBDomainServers` |
+| 2 | IABB.Discovery | AD server discovery; marks disabled, cluster-name and stale (`-StaleDays`) objects as Skipped with a reason (v1.1.0) | `Get-IABBDomainServers` |
 | 3 | IABB.RoleDetection | Roles from services, features, shares, printers, DomainRole and platform (DC, DNS, DHCP, AD CS, IIS, SQL, Hyper-V Host / nested, RDS Session Host, File, Print, DFS Namespace, DFS Replication); role notes (e.g. demoted DC) | `Invoke-IABBRoleDetection` |
 | 4 | IABB.Collector.ADDS | Forest/domain, functional levels, FSMO, DCs | `Invoke-IABBADDSCollection` |
-| 5 | IABB.Collector.DNS | Zones, forwarders | `Invoke-IABBDNSCollection` |
+| 5 | IABB.Collector.DNS | Zones, forwarders: DNS WMI provider `root\MicrosoftDNS` with a hard 120 s limit per query (v1.1.0); DnsServer module fallback | `Invoke-IABBDNSCollection` |
 | 6 | IABB.Collector.DHCP | IPv4 scopes | `Invoke-IABBDHCPCollection` |
 | 7 | IABB.Collector.IIS | Version, sites, bindings, app pools, applications (WebAdministration, appcmd fallback) | `Invoke-IABBIISCollection` |
 | 8 | IABB.Collector.SQL | SQL instances from the registry (64/32-bit) | `Invoke-IABBSqlCollection` |

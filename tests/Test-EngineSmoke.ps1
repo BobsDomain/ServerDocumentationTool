@@ -44,6 +44,19 @@ try { $hn = [System.Net.Dns]::GetHostEntry($env:COMPUTERNAME).HostName; if ($hn)
 foreach ($n in $localNames) { if (Test-IABBIsLocal $n) { Pass ("local: '" + $n + "'") } else { Fail ("not recognised as local: '" + $n + "'") } }
 foreach ($n in @('NOT-A-REAL-HOST-1234', 'server01.contoso.local')) { if (-not (Test-IABBIsLocal $n)) { Pass ("remote: '" + $n + "'") } else { Fail ("wrongly treated as local: '" + $n + "'") } }
 
+# 2b. DNS collector (v1.1.0: DNS WMI provider with a hard per-query limit). The workflow installs the DNS role with zone ci.test and forwarder 192.0.2.53.
+if (Get-Service DNS -ErrorAction SilentlyContinue) {
+    $d = Invoke-IABBDNSCollection -ComputerName $cn -TimeoutSec 240
+    if ($d.Success) { Pass ("DNS collected via " + $d.Source + " (" + @($d.Zones).Count + " zones, method " + $d.Method + ")") } else { Fail ("DNS collection failed: " + $d.Error) }
+    if ([string]$d.Source -like 'DNS WMI provider*') { Pass 'DNS read through the WMI provider' } else { Fail ("DNS not read through the WMI provider: " + $d.Source) }
+    if (@($d.Zones | Where-Object { $_.ZoneName -eq 'ci.test' -and $_.ZoneType -eq 'Primary' }).Count -eq 1) { Pass 'DNS test zone ci.test found (Primary)' } else { Fail 'DNS test zone ci.test not found' }
+    if (@($d.Forwarders) -contains '192.0.2.53') { Pass 'DNS forwarder 192.0.2.53 found' } else { Fail ("DNS forwarder not found: " + (@($d.Forwarders) -join ', ')) }
+} else { Write-Host 'SKIP  DNS Server role not installed on this machine' }
+
+# 2c. discovery returns the skip fields (no AD on the build machine: the local fallback is returned)
+$disc = @(Get-IABBDomainServers -StaleDays 90)
+if ($disc.Count -ge 1 -and $disc[0].PSObject.Properties['Skipped'] -and $disc[0].PSObject.Properties['SkipReason']) { Pass 'discovery returns Skipped/SkipReason' } else { Fail 'discovery result has no Skipped/SkipReason' }
+
 New-Item -Path $OutputPath -ItemType Directory -Force | Out-Null
 $raw = Join-Path $OutputPath 'RawData'; New-Item -Path $raw -ItemType Directory -Force | Out-Null
 

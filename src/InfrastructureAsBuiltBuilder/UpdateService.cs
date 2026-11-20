@@ -7,6 +7,7 @@ using System.IO;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Web.Script.Serialization;
 
 namespace IABB.App
@@ -135,7 +136,38 @@ namespace IABB.App
             string shaFile = zip + ".sha256";
             Download(release.ShaUrl, shaFile);
 
-            string expected = File.ReadAllText(shaFile).Trim().Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)[0];
+            VerifySha256(zip, shaFile);
+            return zip;
+        }
+
+        /// <summary>
+        /// v1.1.0 "Update from file...": for servers without internet. The ZIP must be named as on the Releases page and its
+        /// .sha256 file must be next to it. Both are copied to a temp folder, the hash is verified, and the copy's path is returned.
+        /// </summary>
+        internal static string PrepareLocalPackage(string zipPath, out Version version)
+        {
+            string name = Path.GetFileName(zipPath);
+            Match m = Regex.Match(name, "^" + Regex.Escape(AssetPrefix) + "v(\\d+\\.\\d+\\.\\d+)\\.zip$", RegexOptions.IgnoreCase);
+            if (!m.Success) throw new InvalidOperationException("Choose a release file named " + AssetPrefix + "v<version>.zip, exactly as downloaded from the Releases page.");
+            version = Normalize(Version.Parse(m.Groups[1].Value));
+            string shaSource = zipPath + ".sha256";
+            if (!File.Exists(shaSource))
+                throw new FileNotFoundException("The checksum file " + name + ".sha256 must be in the same folder as the ZIP. Download both files from the Releases page and copy them together.", shaSource);
+
+            string dir = Path.Combine(Path.GetTempPath(), "IABB_Update_" + DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture));
+            Directory.CreateDirectory(dir);
+            string zip = Path.Combine(dir, name);
+            File.Copy(zipPath, zip, true);
+            File.Copy(shaSource, zip + ".sha256", true);
+            VerifySha256(zip, zip + ".sha256");
+            return zip;
+        }
+
+        private static void VerifySha256(string zip, string shaFile)
+        {
+            string[] parts = File.ReadAllText(shaFile).Trim().Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 0) throw new InvalidOperationException("The checksum file is empty.");
+            string expected = parts[0];
             string actual;
             using (var sha = SHA256.Create())
             using (var fs = File.OpenRead(zip))
@@ -145,9 +177,8 @@ namespace IABB.App
             if (!string.Equals(expected, actual, StringComparison.OrdinalIgnoreCase))
             {
                 try { File.Delete(zip); } catch { }
-                throw new InvalidOperationException("The downloaded file failed its SHA256 check (expected " + expected + ", got " + actual + "). Nothing was changed.");
+                throw new InvalidOperationException("The update file failed its SHA256 check (expected " + expected + ", got " + actual + "). Nothing was changed.");
             }
-            return zip;
         }
 
         private static void Download(string url, string path)

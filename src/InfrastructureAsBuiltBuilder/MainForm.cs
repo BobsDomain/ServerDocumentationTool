@@ -51,6 +51,7 @@ namespace IABB.App
         private readonly Button btnCancel = new Button();
         private readonly Button btnOpen = new Button();
         private readonly Button btnUpdate = new Button();
+        private readonly Button btnUpdateFile = new Button();
         private readonly LinkLabel lnkUpdate = new LinkLabel();
         private readonly Label lblCount = new Label();
         private readonly DataGridView grid = new DataGridView();
@@ -116,8 +117,9 @@ namespace IABB.App
             SetButton(btnStart, "Start Assessment", 335, 224, 160, 32); btnStart.Click += async (s, e) => await StartAssessmentAsync();
             SetButton(btnCancel, "Cancel", 505, 224, 100, 32); btnCancel.Enabled = false; btnCancel.Click += (s, e) => CancelRun();
             SetButton(btnOpen, "Open Output Folder", 615, 224, 150, 32); btnOpen.Enabled = false; btnOpen.Click += (s, e) => OpenOutputFolder();
-            SetButton(btnUpdate, "Check for Updates", 775, 224, 150, 32); btnUpdate.Click += async (s, e) => await CheckForUpdatesAsync(false);
-            lblCount.Location = new Point(940, 230); lblCount.Size = new Size(300, 22); lblCount.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            SetButton(btnUpdate, "Check for Updates", 775, 224, 140, 32); btnUpdate.Click += async (s, e) => await CheckForUpdatesAsync(false);
+            SetButton(btnUpdateFile, "Update from File...", 925, 224, 150, 32); btnUpdateFile.Click += (s, e) => UpdateFromFile();
+            lblCount.Location = new Point(1085, 230); lblCount.Size = new Size(155, 22); lblCount.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
 
             grid.Location = new Point(25, 268); grid.Size = new Size(1215, 330);
             grid.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
@@ -139,7 +141,7 @@ namespace IABB.App
             txtLog.Font = new Font("Consolas", 9F);
 
             Controls.AddRange(new Control[] { title, lblVersion, lnkUpdate, lblClient, txtClient, chkCred, btnCred, lblOutput, txtOutput, btnBrowse, chkDcom, lblParallel, numParallel, grp,
-                btnTest, btnRemove, btnStart, btnCancel, btnOpen, btnUpdate, lblCount, grid, progress, txtLog });
+                btnTest, btnRemove, btnStart, btnCancel, btnOpen, btnUpdate, btnUpdateFile, lblCount, grid, progress, txtLog });
             UpdateCount();
             UpdateButtons();
         }
@@ -220,13 +222,13 @@ namespace IABB.App
             chkCred.Enabled = !running; btnCred.Enabled = !running && chkCred.Checked; chkDcom.Enabled = !running; numParallel.Enabled = !running;
             btnCancel.Enabled = running;
             btnUpdate.Enabled = !running;
+            btnUpdateFile.Enabled = !running;
             btnOpen.Enabled = !string.IsNullOrEmpty(lastOutputFolder) && Directory.Exists(lastOutputFolder);
         }
 
         private void UpdateCount()
         {
-            lblCount.Text = string.Format("{0} server(s) queued   |   step limit {1}s, server limit {2} min",
-                grid.Rows.Count, config.GetInt("SectionTimeoutSec", 300, 30, 3600), config.GetInt("ServerTimeLimitMinutes", 30, 1, 600));
+            lblCount.Text = string.Format("{0} server(s) queued", grid.Rows.Count);
         }
 
         private int AddServerRows(IEnumerable<KeyValuePair<string, string>> servers)
@@ -364,13 +366,16 @@ namespace IABB.App
         private async Task DiscoverAsync()
         {
             string filter = config.GetString("ServerOperatingSystemFilter", "Windows Server");
-            logger.Log("Discovering domain servers...");
+            int staleDays = config.GetInt("DiscoveryStaleDays", 90, 0, 3650);
+            logger.Log("Discovering domain servers" + (staleDays > 0 ? " (skipping disabled, cluster-name and accounts with no logon for " + staleDays + " days)..." : "..."));
             btnDiscover.Enabled = false;
             try
             {
-                var found = await Task.Run(() => engine.Run("Get-IABBDomainServers", new Dictionary<string, object> { { "OperatingSystemFilter", filter } }));
-                int n = AddServerRows(ToServerList(found));
-                logger.Log(string.Format("Added {0} server(s) from Active Directory.", n));
+                var found = EngineHost.NonNull(await Task.Run(() => engine.Run("Get-IABBDomainServers", new Dictionary<string, object> { { "OperatingSystemFilter", filter }, { "StaleDays", staleDays } })));
+                var skipped = found.Where(o => EngineHost.Bool(o, "Skipped")).ToList();
+                foreach (PSObject sk in skipped) logger.Log("  Skipped " + EngineHost.Str(sk, "ServerName") + ": " + EngineHost.Str(sk, "SkipReason"));
+                int n = AddServerRows(ToServerList(found.Where(o => !EngineHost.Bool(o, "Skipped"))));
+                logger.Log(string.Format("Added {0} server(s) from Active Directory; skipped {1} (listed above). Set DiscoveryStaleDays to 0 in Engine\\Config\\appsettings.json to include stale accounts.", n, skipped.Count));
             }
             catch (Exception ex) { logger.Log("Domain discovery failed: " + ex.Message); }
             finally { UpdateButtons(); }
@@ -578,6 +583,40 @@ namespace IABB.App
         }
 
         // ------------------------------------------------------------------ updates
+
+        /// <summary>v1.1.0: install a release ZIP copied to this machine (servers without internet). Needs the .sha256 file next to it.</summary>
+        private void UpdateFromFile()
+        {
+            if (running) { MessageBox.Show(this, "Wait for the current run to finish before updating.", AppInfo.ProductName); return; }
+            using (var dlg = new OpenFileDialog
+            {
+                Title = "Choose the release ZIP (its .sha256 file must be in the same folder)",
+                Filter = "Server Documentation Tool release (" + UpdateService.AssetPrefix + "v*.zip)|" + UpdateService.AssetPrefix + "v*.zip|ZIP files (*.zip)|*.zip"
+            })
+            {
+                if (dlg.ShowDialog(this) != DialogResult.OK) return;
+                try
+                {
+                    Version v;
+                    string zip = UpdateService.PrepareLocalPackage(dlg.FileName, out v);
+                    string current = AppInfo.VersionText;
+                    string question;
+                    if (v > AppInfo.Version) question = "Install v" + v.ToString(3) + " now? (installed: " + current + ")";
+                    else if (v == AppInfo.Version) question = "v" + v.ToString(3) + " is already installed. Reinstall it?";
+                    else question = "v" + v.ToString(3) + " is OLDER than the installed " + current + ". Install it anyway?";
+                    question += Environment.NewLine + Environment.NewLine + "The SHA256 checksum matched. The application will close, update itself and restart. Your settings (Engine\\Config\\appsettings.json) are kept.";
+                    if (MessageBox.Show(this, question, AppInfo.ProductName, MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+                    logger.Log("Installing v" + v.ToString(3) + " from " + dlg.FileName + " (SHA256 verified). Starting the updater...");
+                    UpdateService.LaunchUpdater(zip, AppInfo.AppDirectory, Application.ExecutablePath);
+                    Close();
+                }
+                catch (Exception ex)
+                {
+                    logger.Log("Update from file failed: " + ex.Message);
+                    MessageBox.Show(this, "The update could not be installed:" + Environment.NewLine + ex.Message, AppInfo.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+            }
+        }
 
         private async Task CheckForUpdatesAsync(bool silent)
         {

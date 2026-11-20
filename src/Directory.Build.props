@@ -1,7 +1,7 @@
 <Project>
   <!-- Shared settings for the app and the updater. CI passes -p:Version=<VERSION.txt>; the value below is the default for local builds. -->
   <PropertyGroup>
-    <Version>1.0.3</Version>
+    <Version>1.1.0</Version>
     <TargetFramework>net48</TargetFramework>
     <LangVersion>7.3</LangVersion>
     <Company>bobsdomain</Company>
