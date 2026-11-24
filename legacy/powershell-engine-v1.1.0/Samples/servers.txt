@@ -1,0 +1,4 @@
+SERVER01.contoso.local
+SERVER02.contoso.local
+SQL01.contoso.local
+DC01.contoso.local

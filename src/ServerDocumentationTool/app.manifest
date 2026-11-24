@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
-  <assemblyIdentity version="1.1.0.0" name="InfrastructureAsBuiltBuilder.app"/>
+  <assemblyIdentity version="2.0.0.0" name="ServerDocumentationTool.app"/>
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">
     <security>
       <requestedPrivileges xmlns="urn:schemas-microsoft-com:asm.v3">
-        <!-- Run elevated, as the PowerShell version required: local collection on the PC running the tool needs administrator rights. -->
+        <!-- Run elevated: local collection (certificates, local groups, IIS config) on the PC running the tool needs administrator rights. -->
         <requestedExecutionLevel level="requireAdministrator" uiAccess="false" />
       </requestedPrivileges>
     </security>

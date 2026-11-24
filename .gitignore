@@ -4,12 +4,15 @@ obj/
 dist/
 .vs/
 *.user
+*.old
 *.suo
 
 # --- CLIENT DATA: never commit run output (this repository is public) ---
 *_AsBuilt_*/
 RawData/
 IABB_Run.log
+ServerDocumentation_Run.log
+selftest.log
 *_AsBuilt.docx
 *_Server_Summary.html
 *.docx

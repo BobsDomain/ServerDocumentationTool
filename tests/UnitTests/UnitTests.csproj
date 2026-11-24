@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Unit tests for the collector logic and the report rules, run by GitHub Actions:
+       UnitTests.exe <fixtures folder>   (exit code 0 = all passed). Compiles the app's source files directly. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>UnitTests</AssemblyName>
+    <RootNamespace>ServerDocumentationTool.Tests</RootNamespace>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="UnitTests.cs" />
+    <Compile Include="..\..\src\ServerDocumentationTool\**\*.cs" Exclude="..\..\src\ServerDocumentationTool\App\Program.cs;..\..\src\ServerDocumentationTool\obj\**;..\..\src\ServerDocumentationTool\bin\**" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="System.Management" />
+    <Reference Include="System.DirectoryServices" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
+    <Reference Include="System.Xml.Linq" />
+  </ItemGroup>
+</Project>

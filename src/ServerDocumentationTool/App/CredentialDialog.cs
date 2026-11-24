@@ -1,12 +1,10 @@
-using System;
 using System.Drawing;
-using System.Management.Automation;
-using System.Security;
 using System.Windows.Forms;
+using ServerDocumentationTool.Collect;
 
-namespace IABB.App
+namespace ServerDocumentationTool
 {
-    /// <summary>Asks for alternate credentials (DOMAIN\user and password). The password is held only in a SecureString.</summary>
+    /// <summary>Asks for alternate credentials (DOMAIN\user and password). Kept in memory for this session only, never saved.</summary>
     internal sealed class CredentialDialog : Form
     {
         private readonly TextBox txtUser = new TextBox();
@@ -48,13 +46,11 @@ namespace IABB.App
             Controls.AddRange(new Control[] { lblInfo, lblUser, txtUser, lblHint, lblPassword, txtPassword, btnOk, btnCancel });
         }
 
-        public PSCredential GetCredential()
+        public Credential GetCredential()
         {
-            var secure = new SecureString();
-            foreach (char c in txtPassword.Text) secure.AppendChar(c);
-            secure.MakeReadOnly();
+            Credential c = Credential.Parse(txtUser.Text, txtPassword.Text);
             txtPassword.Clear();
-            return new PSCredential(txtUser.Text.Trim(), secure);
+            return c;
         }
     }
 }

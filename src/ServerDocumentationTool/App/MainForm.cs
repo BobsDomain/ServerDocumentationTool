@@ -4,30 +4,27 @@ using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
-using System.Management.Automation;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using ServerDocumentationTool.Collect;
+using ServerDocumentationTool.Common;
 
-namespace IABB.App
+namespace ServerDocumentationTool
 {
     internal sealed class MainForm : Form
     {
-        private const int EngineRunspaces = 40;
-
         private static readonly Color ColRunning = Color.FromArgb(220, 235, 250);
         private static readonly Color ColComplete = Color.FromArgb(212, 237, 218);
         private static readonly Color ColPartial = Color.FromArgb(255, 243, 205);
         private static readonly Color ColFailed = Color.FromArgb(248, 215, 218);
         private static readonly Color ColCancelled = Color.FromArgb(231, 230, 230);
 
-        private readonly AppConfig config;
+        private readonly Settings config;
         private readonly RunLogger logger;
-        private EngineHost engine;
-        private bool engineReady;
         private bool running;
         private CancellationTokenSource cts;
-        private PSCredential credential;
+        private Credential credential;
         private string lastOutputFolder;
         private ReleaseInfo availableUpdate;
 
@@ -37,7 +34,7 @@ namespace IABB.App
         private readonly Button btnBrowse = new Button();
         private readonly CheckBox chkCred = new CheckBox();
         private readonly Button btnCred = new Button();
-        private readonly CheckBox chkDcom = new CheckBox();
+        private readonly Button btnSettings = new Button();
         private readonly NumericUpDown numParallel = new NumericUpDown();
         private readonly TextBox txtServers = new TextBox();
         private readonly Button btnAddServers = new Button();
@@ -60,7 +57,7 @@ namespace IABB.App
 
         public MainForm()
         {
-            config = AppConfig.Load(AppInfo.EngineDirectory);
+            config = Settings.Load();
             BuildLayout();
             logger = new RunLogger(txtLog);
             Shown += OnShownAsync;
@@ -87,20 +84,21 @@ namespace IABB.App
             lnkUpdate.LinkClicked += async (s, e) => await InstallUpdateAsync();
 
             var lblClient = new Label { Text = "Client Name", Location = new Point(25, 58), Size = new Size(90, 22) };
-            txtClient.Location = new Point(120, 55); txtClient.Size = new Size(300, 24); txtClient.Text = "Client";
+            txtClient.Location = new Point(120, 55); txtClient.Size = new Size(300, 24); txtClient.Text = config.Str("DefaultClientName");
             chkCred.Text = "Use alternate credentials"; chkCred.Location = new Point(840, 55); chkCred.Size = new Size(190, 24);
             chkCred.CheckedChanged += (s, e) => OnCredentialToggled();
             btnCred.Text = "Change..."; btnCred.Location = new Point(1035, 53); btnCred.Size = new Size(90, 26); btnCred.Enabled = false;
             btnCred.Click += (s, e) => PromptCredential();
 
             var lblOutput = new Label { Text = "Output Path", Location = new Point(25, 88), Size = new Size(90, 22) };
-            txtOutput.Location = new Point(120, 85); txtOutput.Size = new Size(610, 24); txtOutput.Text = config.GetString("DefaultOutputRoot", @"C:\ServerDocumentation");
+            txtOutput.Location = new Point(120, 85); txtOutput.Size = new Size(610, 24); txtOutput.Text = config.Str("DefaultOutputRoot");
             btnBrowse.Text = "Browse..."; btnBrowse.Location = new Point(736, 83); btnBrowse.Size = new Size(90, 26);
             btnBrowse.Click += (s, e) => BrowseOutput();
-            chkDcom.Text = "Enable DCOM fallback"; chkDcom.Location = new Point(840, 85); chkDcom.Size = new Size(170, 24); chkDcom.Checked = config.GetBool("EnableDcomFallback", true);
+            btnSettings.Text = "Open Settings"; btnSettings.Location = new Point(840, 83); btnSettings.Size = new Size(120, 26);
+            btnSettings.Click += (s, e) => OpenSettings();
             var lblParallel = new Label { Text = "Servers at once", Location = new Point(1015, 88), Size = new Size(100, 22) };
             numParallel.Location = new Point(1118, 85); numParallel.Size = new Size(55, 24); numParallel.Minimum = 1; numParallel.Maximum = 16;
-            numParallel.Value = config.GetInt("ParallelServers", 4, 1, 16);
+            numParallel.Value = config.Int("ParallelServers", 1, 16);
 
             var grp = new GroupBox { Text = "Target Servers", Location = new Point(25, 118), Size = new Size(1215, 96), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
             var lblAdd = new Label { Text = "Enter server name(s) - separate with comma, space or new line:", Location = new Point(12, 22), Size = new Size(430, 20) };
@@ -140,7 +138,7 @@ namespace IABB.App
             txtLog.Multiline = true; txtLog.ScrollBars = ScrollBars.Vertical; txtLog.ReadOnly = true; txtLog.BackColor = SystemColors.Window;
             txtLog.Font = new Font("Consolas", 9F);
 
-            Controls.AddRange(new Control[] { title, lblVersion, lnkUpdate, lblClient, txtClient, chkCred, btnCred, lblOutput, txtOutput, btnBrowse, chkDcom, lblParallel, numParallel, grp,
+            Controls.AddRange(new Control[] { title, lblVersion, lnkUpdate, lblClient, txtClient, chkCred, btnCred, lblOutput, txtOutput, btnBrowse, btnSettings, lblParallel, numParallel, grp,
                 btnTest, btnRemove, btnStart, btnCancel, btnOpen, btnUpdate, btnUpdateFile, lblCount, grid, progress, txtLog });
             UpdateCount();
             UpdateButtons();
@@ -155,38 +153,13 @@ namespace IABB.App
 
         private async void OnShownAsync(object sender, EventArgs e)
         {
-            logger.Log(AppInfo.ProductName + " " + AppInfo.VersionText + " - loading the engine from " + AppInfo.EngineDirectory);
-            try
-            {
-                engine = await Task.Run(() => new EngineHost(AppInfo.EngineDirectory, EngineRunspaces));
-                IList<string> missing = await Task.Run(() => engine.FindMissingCommands());
-                if (missing.Count > 0) throw new InvalidOperationException("these engine functions did not load: " + string.Join(", ", missing));
-                engineReady = true;
-                logger.Log("Engine loaded (Windows PowerShell " + PSVersionText() + "). Add target servers by name, import a list, add the local server, or discover the domain.");
-            }
-            catch (Exception ex)
-            {
-                logger.Log("ERROR: the engine could not be loaded: " + ex.Message);
-                MessageBox.Show(this, "The PowerShell engine could not be loaded:" + Environment.NewLine + Environment.NewLine + ex.Message +
-                    Environment.NewLine + Environment.NewLine + "Check that the Engine folder is next to the application and that Windows PowerShell 5.1 is installed.",
-                    AppInfo.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
+            logger.Log(AppInfo.ProductName + " " + AppInfo.VersionText + " - native Windows application (WMI/DCOM, Remote Registry, LDAP; no PowerShell or WinRM needed).");
+            logger.Log("Settings: " + config.Path + (config.LoadError != null ? " (could not be read, defaults used: " + config.LoadError + ")" : string.Empty));
+            if (Environment.GetCommandLineArgs().Skip(1).Any(a => string.Equals(a, "--updated", StringComparison.OrdinalIgnoreCase)))
+                logger.Log("Updated to " + AppInfo.VersionText + ".");
+            logger.Log("Add target servers by name, import a list, add the local server, or discover the domain.");
             UpdateButtons();
-            if (config.GetBool("CheckForUpdatesOnStart", true)) await CheckForUpdatesAsync(true);
-        }
-
-        private string PSVersionText()
-        {
-            try
-            {
-                using (var ps = engine.Create())
-                {
-                    ps.AddScript("$PSVersionTable.PSVersion.ToString()");
-                    var r = ps.Invoke();
-                    return r.Count > 0 ? r[0].ToString() : "?";
-                }
-            }
-            catch { return "?"; }
+            if (config.Bool("CheckForUpdatesOnStart")) await CheckForUpdatesAsync(true);
         }
 
         private void OnFormClosing(object sender, FormClosingEventArgs e)
@@ -197,7 +170,6 @@ namespace IABB.App
                 if (answer != DialogResult.Yes) { e.Cancel = true; return; }
                 CancelRun();
             }
-            if (engine != null) { var en = engine; engine = null; Task.Run(() => en.Dispose()); }
         }
 
         // ------------------------------------------------------------------ helpers
@@ -215,11 +187,11 @@ namespace IABB.App
 
         private void UpdateButtons()
         {
-            bool idle = engineReady && !running;
+            bool idle = !running;
             foreach (var b in new Control[] { btnAddServers, btnImport, btnAddLocal, btnDiscover, btnClear, btnTest, btnRemove, btnStart })
                 b.Enabled = idle;
             txtClient.Enabled = !running; txtOutput.Enabled = !running; btnBrowse.Enabled = !running;
-            chkCred.Enabled = !running; btnCred.Enabled = !running && chkCred.Checked; chkDcom.Enabled = !running; numParallel.Enabled = !running;
+            chkCred.Enabled = !running; btnCred.Enabled = !running && chkCred.Checked; numParallel.Enabled = !running;
             btnCancel.Enabled = running;
             btnUpdate.Enabled = !running;
             btnUpdateFile.Enabled = !running;
@@ -229,6 +201,11 @@ namespace IABB.App
         private void UpdateCount()
         {
             lblCount.Text = string.Format("{0} server(s) queued", grid.Rows.Count);
+        }
+
+        private int AddServerRows(IEnumerable<string> names, string source)
+        {
+            return AddServerRows(names.Select(n => new KeyValuePair<string, string>(n, source)));
         }
 
         private int AddServerRows(IEnumerable<KeyValuePair<string, string>> servers)
@@ -245,14 +222,6 @@ namespace IABB.App
             }
             UpdateCount();
             return added;
-        }
-
-        private static List<KeyValuePair<string, string>> ToServerList(IEnumerable<PSObject> objects)
-        {
-            var list = new List<KeyValuePair<string, string>>();
-            foreach (PSObject o in EngineHost.NonNull(objects))
-                list.Add(new KeyValuePair<string, string>(EngineHost.Str(o, "ServerName"), EngineHost.Str(o, "Source")));
-            return list;
         }
 
         private List<DataGridViewRow> IncludedRows()
@@ -292,19 +261,19 @@ namespace IABB.App
 
         private bool PromptCredential()
         {
-            using (var dlg = new CredentialDialog(credential != null ? credential.UserName : null))
+            using (var dlg = new CredentialDialog(credential != null ? credential.FullUser : null))
             {
                 if (dlg.ShowDialog(this) == DialogResult.OK)
                 {
                     credential = dlg.GetCredential();
-                    logger.Log("Alternate credentials set for " + credential.UserName + ".");
+                    logger.Log("Alternate credentials set for " + credential.FullUser + ".");
                     return true;
                 }
             }
             return false;
         }
 
-        private PSCredential CurrentCredential()
+        private Credential CurrentCredential()
         {
             return chkCred.Checked ? credential : null;
         }
@@ -318,6 +287,17 @@ namespace IABB.App
             }
         }
 
+        private void OpenSettings()
+        {
+            try
+            {
+                if (!File.Exists(config.Path)) Settings.Load(config.Path);
+                Process.Start("notepad.exe", "\"" + config.Path + "\"");
+                logger.Log("Opened the settings file " + config.Path + ". Changes apply the next time the application starts.");
+            }
+            catch (Exception ex) { logger.Log("Could not open the settings file: " + ex.Message); }
+        }
+
         private void OpenOutputFolder()
         {
             if (!string.IsNullOrEmpty(lastOutputFolder) && Directory.Exists(lastOutputFolder))
@@ -326,19 +306,14 @@ namespace IABB.App
 
         // ------------------------------------------------------------------ server list
 
-        private async Task AddFromTextAsync()
+        private Task AddFromTextAsync()
         {
-            string text = txtServers.Text;
-            try
-            {
-                var found = await Task.Run(() => engine.Run("ConvertFrom-IABBServerText", new Dictionary<string, object> { { "Text", text } }));
-                var list = ToServerList(found);
-                if (list.Count == 0) { logger.Log("No valid server names entered."); return; }
-                int n = AddServerRows(list);
-                logger.Log(string.Format("Added {0} server(s) from manual entry.", n));
-                txtServers.Clear();
-            }
-            catch (Exception ex) { logger.Log("Add error: " + ex.Message); }
+            var list = RunFiles.ParseText(txtServers.Text);
+            if (list.Count == 0) { logger.Log("No valid server names entered."); return Task.CompletedTask; }
+            int n = AddServerRows(list, "Manual Entry");
+            logger.Log(string.Format("Added {0} server(s) from manual entry.", n));
+            txtServers.Clear();
+            return Task.CompletedTask;
         }
 
         private async Task ImportAsync()
@@ -349,8 +324,9 @@ namespace IABB.App
                 string path = dlg.FileName;
                 try
                 {
-                    var found = await Task.Run(() => engine.Run("Import-IABBServerList", new Dictionary<string, object> { { "Path", path } }));
-                    int n = AddServerRows(ToServerList(found));
+                    var found = await Task.Run(() => RunFiles.ImportList(path));
+                    string source = string.Equals(Path.GetExtension(path), ".csv", StringComparison.OrdinalIgnoreCase) ? "CSV Import" : "TXT Import";
+                    int n = AddServerRows(found, source);
                     logger.Log(string.Format("Imported {0} server(s) from {1}.", n, Path.GetFileName(path)));
                 }
                 catch (Exception ex) { logger.Log("Import error: " + ex.Message); }
@@ -365,17 +341,17 @@ namespace IABB.App
 
         private async Task DiscoverAsync()
         {
-            string filter = config.GetString("ServerOperatingSystemFilter", "Windows Server");
-            int staleDays = config.GetInt("DiscoveryStaleDays", 90, 0, 3650);
+            string filter = config.Str("ServerOperatingSystemFilter");
+            int staleDays = config.Int("DiscoveryStaleDays", 0, 3650);
             logger.Log("Discovering domain servers" + (staleDays > 0 ? " (skipping disabled, cluster-name and accounts with no logon for " + staleDays + " days)..." : "..."));
             btnDiscover.Enabled = false;
             try
             {
-                var found = EngineHost.NonNull(await Task.Run(() => engine.Run("Get-IABBDomainServers", new Dictionary<string, object> { { "OperatingSystemFilter", filter }, { "StaleDays", staleDays } })));
-                var skipped = found.Where(o => EngineHost.Bool(o, "Skipped")).ToList();
-                foreach (PSObject sk in skipped) logger.Log("  Skipped " + EngineHost.Str(sk, "ServerName") + ": " + EngineHost.Str(sk, "SkipReason"));
-                int n = AddServerRows(ToServerList(found.Where(o => !EngineHost.Bool(o, "Skipped"))));
-                logger.Log(string.Format("Added {0} server(s) from Active Directory; skipped {1} (listed above). Set DiscoveryStaleDays to 0 in Engine\\Config\\appsettings.json to include stale accounts.", n, skipped.Count));
+                var found = await Task.Run(() => Discovery.DomainServers(filter, staleDays));
+                var skipped = found.Where(o => o.Skipped).ToList();
+                foreach (var sk in skipped) logger.Log("  Skipped " + sk.ServerName + ": " + sk.SkipReason);
+                int n = AddServerRows(found.Where(o => !o.Skipped).Select(o => o.ServerName), "Active Directory");
+                logger.Log(string.Format("Added {0} server(s) from Active Directory; skipped {1} (listed above). Set DiscoveryStaleDays to 0 in the settings file to include stale accounts.", n, skipped.Count));
             }
             catch (Exception ex) { logger.Log("Domain discovery failed: " + ex.Message); }
             finally { UpdateButtons(); }
@@ -396,9 +372,9 @@ namespace IABB.App
         {
             var rows = IncludedRows();
             if (rows.Count == 0) { logger.Log("No included servers to test."); return; }
-            PSCredential cred = CurrentCredential();
-            bool dcom = chkDcom.Checked;
-            int timeout = Math.Max(30, config.GetInt("TimeoutSeconds", 30, 5, 600));
+            Credential cred = CurrentCredential();
+            var rs = RunSettings.From(config);
+            rs.Credential = cred;
             int parallel = (int)numParallel.Value;
             running = true; UpdateButtons();
             progress.Maximum = rows.Count; progress.Value = 0;
@@ -411,22 +387,19 @@ namespace IABB.App
                 try
                 {
                     Ui(() => { row.Cells["Reachability"].Value = "Testing..."; SetRowColour(row, ColRunning); });
-                    var p = new Dictionary<string, object> { { "ComputerName", name }, { "EnableDcomFallback", dcom }, { "OperationTimeoutSec", timeout } };
-                    if (cred != null) p["Credential"] = cred;
-                    PSObject r = (await Task.Run(() => engine.Run("Test-IABBCollectionReadiness", p))).FirstOrDefault(x => x != null);
-                    string cls = EngineHost.Str(r, "Classification");
-                    string transport = EngineHost.Str(r, "Transport");
-                    bool reachable = EngineHost.Bool(r, "Reachable");
-                    string detail = EngineHost.Str(r, "Detail");
-                    string wsErr = EngineHost.Str(r, "WsmanError");
+                    Target target = rs.TargetFor(name);
+                    Dictionary<string, object> r = await Task.Run(() => ServerCollector.Probe(target));
+                    string cls = N.S(r, "Classification");
+                    string transport = N.S(r, "Transport");
+                    bool reachable = N.IsTrue(N.Get(r, "Reachable"));
+                    string detail = N.S(r, "Detail");
                     Ui(() =>
                     {
                         row.Cells["Reachability"].Value = cls; row.Cells["Transport"].Value = transport;
                         row.Cells["Result"].Value = reachable ? "Ready (" + transport + ")" : cls;
-                        SetRowColour(row, reachable ? (transport == "DCOM" ? ColPartial : ColComplete) : ColFailed);
+                        SetRowColour(row, reachable ? ColComplete : ColFailed);
                     });
                     if (!reachable && detail.Length > 0) logger.Log("  " + name + ": " + detail);
-                    if (transport == "DCOM" && wsErr.Length > 0) logger.Log("  " + name + ": WinRM failed, DCOM only - " + wsErr);
                 }
                 catch (Exception ex)
                 {
@@ -465,34 +438,20 @@ namespace IABB.App
             int done = 0;
             try
             {
-                PSObject folder = (await Task.Run(() => engine.Run("New-IABBRunFolder", new Dictionary<string, object> { { "OutputRoot", outputRoot }, { "ClientName", client } }))).FirstOrDefault(x => x != null);
-                if (folder == null) throw new InvalidOperationException("the output folder could not be created.");
-                var s = new RunSettings
-                {
-                    ClientName = EngineHost.Str(folder, "ClientName"),
-                    RunRoot = EngineHost.Str(folder, "Root"),
-                    RawDataPath = EngineHost.Str(folder, "RawData"),
-                    Credential = CurrentCredential(),
-                    EnableDcomFallback = chkDcom.Checked,
-                    ParallelServers = (int)numParallel.Value,
-                    ServerTimeLimitMinutes = config.GetInt("ServerTimeLimitMinutes", 30, 1, 600),
-                    TimeoutSeconds = config.GetInt("TimeoutSeconds", 30, 5, 600),
-                    CimOperationTimeoutSec = config.GetInt("CimOperationTimeoutSec", 180, 10, 3600),
-                    SectionTimeoutSec = config.GetInt("SectionTimeoutSec", 300, 30, 3600),
-                    GroupMemberDisplayCap = config.GetInt("GroupMemberDisplayCap", 15, 1, 100000),
-                    ApplicationDisplayCap = config.GetInt("ApplicationDisplayCap", 200, 1, 100000),
-                    IncludeWorkstations = config.GetBool("IncludeWorkstations", false)
-                };
+                var s = RunSettings.From(config);
+                s.Credential = CurrentCredential();
+                s.ParallelServers = (int)numParallel.Value;
+                await Task.Run(() => RunFiles.CreateRunFolder(s, outputRoot, client));
                 lastOutputFolder = s.RunRoot;
-                logger.SetFile(Path.Combine(s.RunRoot, "IABB_Run.log"));
+                logger.SetFile(Path.Combine(s.RunRoot, RunLogger.FileName));
                 logger.Log("Created output folder: " + s.RunRoot);
                 logger.Log(string.Format("{0} {1} - run started by {2}\\{3} on {4}", AppInfo.ProductName, AppInfo.VersionText, Environment.UserDomainName, Environment.UserName, Environment.MachineName));
-                logger.Log(string.Format("Client: {0} | Credentials: {1} | DCOM fallback: {2} | servers at once: {3} | CIM query limit {4}s | step limit {5}s | server limit {6} min",
-                    s.ClientName, s.Credential != null ? s.Credential.UserName : "current user", s.EnableDcomFallback, s.ParallelServers, s.CimOperationTimeoutSec, s.SectionTimeoutSec, s.ServerTimeLimitMinutes));
+                logger.Log(string.Format("Client: {0} | Credentials: {1} | servers at once: {2} | connect limit {3}s | WMI query limit {4}s | step limit {5}s | server limit {6} min",
+                    s.ClientName, s.Credential != null ? s.Credential.FullUser : "current user", s.ParallelServers, s.ConnectTimeoutSec, s.WmiQueryTimeoutSec, s.SectionTimeoutSec, s.ServerTimeLimitMinutes));
                 logger.Log(string.Format("Servers ({0}): {1}", names.Count, string.Join(", ", names)));
                 foreach (var r in rows) { r.Cells["Status"].Value = "Queued"; r.Cells["Result"].Value = ""; SetRowColour(r, SystemColors.Window); }
 
-                var runner = new AssessmentRunner(engine);
+                var runner = new Runner();
                 runner.ServerProgress += (name, msg) =>
                 {
                     logger.Log("    ... " + name + ": " + msg);
@@ -518,15 +477,10 @@ namespace IABB.App
 
                 List<ServerOutcome> outcomes = await runner.RunAsync(names, s, cts.Token);
 
-                var forSummary = outcomes.Where(o => o.Result != null && !o.SkippedWorkstation).Select(o => o.Result).ToArray();
-                var cancelled = outcomes.Where(o => o.Cancelled).Select(o => o.Name).ToArray();
                 string htmlName = s.ClientName + "_Server_Summary.html";
                 try
                 {
-                    await Task.Run(() => engine.Run("New-IABBAppSummary", new Dictionary<string, object>
-                    {
-                        { "Results", forSummary }, { "CancelledServers", cancelled }, { "OutputPath", Path.Combine(s.RunRoot, htmlName) }, { "ClientName", s.ClientName }
-                    }));
+                    await Task.Run(() => RunFiles.WriteSummary(outcomes, Path.Combine(s.RunRoot, htmlName), s.ClientName));
                     logger.Log("Created HTML summary: " + htmlName);
                 }
                 catch (Exception ex) { logger.Log("  ERROR: HTML summary could not be generated: " + ex.Message); }
@@ -584,30 +538,24 @@ namespace IABB.App
 
         // ------------------------------------------------------------------ updates
 
-        /// <summary>v1.1.0: install a release ZIP copied to this machine (servers without internet). Needs the .sha256 file next to it.</summary>
+        /// <summary>Install a release copied to this machine (servers without internet): ServerDocumentationTool.exe with its .sha256 file next to it.</summary>
         private void UpdateFromFile()
         {
             if (running) { MessageBox.Show(this, "Wait for the current run to finish before updating.", AppInfo.ProductName); return; }
             using (var dlg = new OpenFileDialog
             {
-                Title = "Choose the release ZIP (its .sha256 file must be in the same folder)",
-                Filter = "Server Documentation Tool release (" + UpdateService.AssetPrefix + "v*.zip)|" + UpdateService.AssetPrefix + "v*.zip|ZIP files (*.zip)|*.zip"
+                Title = "Choose the new " + AppInfo.ExeName + " (its .sha256 file must be in the same folder)",
+                Filter = "Server Documentation Tool (" + AppInfo.ExeName + ")|" + AppInfo.ExeName + "|Programs (*.exe)|*.exe"
             })
             {
                 if (dlg.ShowDialog(this) != DialogResult.OK) return;
                 try
                 {
                     Version v;
-                    string zip = UpdateService.PrepareLocalPackage(dlg.FileName, out v);
-                    string current = AppInfo.VersionText;
-                    string question;
-                    if (v > AppInfo.Version) question = "Install v" + v.ToString(3) + " now? (installed: " + current + ")";
-                    else if (v == AppInfo.Version) question = "v" + v.ToString(3) + " is already installed. Reinstall it?";
-                    else question = "v" + v.ToString(3) + " is OLDER than the installed " + current + ". Install it anyway?";
-                    question += Environment.NewLine + Environment.NewLine + "The SHA256 checksum matched. The application will close, update itself and restart. Your settings (Engine\\Config\\appsettings.json) are kept.";
-                    if (MessageBox.Show(this, question, AppInfo.ProductName, MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
-                    logger.Log("Installing v" + v.ToString(3) + " from " + dlg.FileName + " (SHA256 verified). Starting the updater...");
-                    UpdateService.LaunchUpdater(zip, AppInfo.AppDirectory, Application.ExecutablePath);
+                    string staged = UpdateService.PrepareLocalFile(dlg.FileName, out v);
+                    if (!ConfirmInstall(v, "The SHA256 checksum matched.")) return;
+                    logger.Log("Installing v" + v.ToString(3) + " from " + dlg.FileName + " (SHA256 verified)...");
+                    UpdateService.InstallAndRestart(staged);
                     Close();
                 }
                 catch (Exception ex)
@@ -618,9 +566,20 @@ namespace IABB.App
             }
         }
 
+        private bool ConfirmInstall(Version v, string verified)
+        {
+            string current = AppInfo.VersionText;
+            string question;
+            if (v > AppInfo.Version) question = "Install v" + v.ToString(3) + " now? (installed: " + current + ")";
+            else if (v == AppInfo.Version) question = "v" + v.ToString(3) + " is already installed. Reinstall it?";
+            else question = "v" + v.ToString(3) + " is OLDER than the installed " + current + ". Install it anyway?";
+            question += Environment.NewLine + Environment.NewLine + verified + " The application will close, replace itself and restart. Your settings (" + config.Path + ") are kept.";
+            return MessageBox.Show(this, question, AppInfo.ProductName, MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes;
+        }
+
         private async Task CheckForUpdatesAsync(bool silent)
         {
-            string repo = UpdateService.ResolveRepository(config.GetString("UpdateRepository", UpdateService.DefaultRepository));
+            string repo = UpdateService.ResolveRepository(config.Str("UpdateRepository"));
             btnUpdate.Enabled = false;
             try
             {
@@ -633,23 +592,22 @@ namespace IABB.App
                     logger.Log("Update available: " + latest.Tag + " (this is " + AppInfo.VersionText + ").");
                     if (!silent) await InstallUpdateAsync();
                 }
-                else
+                else if (!silent)
                 {
-                    if (!silent)
-                    {
-                        string msg = latest == null ? "No releases have been published yet." : "You have the latest version (" + AppInfo.VersionText + ").";
-                        logger.Log("Update check: " + msg);
-                        MessageBox.Show(this, msg, AppInfo.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    }
+                    string msg = latest == null ? "No releases have been published yet." : "You have the latest version (" + AppInfo.VersionText + ").";
+                    logger.Log("Update check: " + msg);
+                    MessageBox.Show(this, msg, AppInfo.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
             }
             catch (Exception ex)
             {
-                logger.Log("Update check failed: " + ex.Message);
+                logger.Log("Update check failed: " + ex.Message + (silent ? " (servers without internet access: use Update from File...)" : string.Empty));
                 if (!silent)
                 {
                     MessageBox.Show(this, "Could not check for updates:" + Environment.NewLine + ex.Message + Environment.NewLine + Environment.NewLine +
-                        "You can download releases manually from" + Environment.NewLine + UpdateService.ReleasesPage(repo), AppInfo.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        "On a server without internet access, download " + AppInfo.ExeName + " and " + AppInfo.ExeName + ".sha256 from" + Environment.NewLine +
+                        UpdateService.ReleasesPage(repo) + Environment.NewLine + "on another PC, copy both files to this server and use Update from File...",
+                        AppInfo.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 }
             }
             finally { btnUpdate.Enabled = !running; }
@@ -659,18 +617,17 @@ namespace IABB.App
         {
             if (availableUpdate == null) return;
             if (running) { MessageBox.Show(this, "Wait for the current run to finish before updating.", AppInfo.ProductName); return; }
-            var answer = MessageBox.Show(this, "Install " + availableUpdate.Tag + " now?" + Environment.NewLine + Environment.NewLine +
-                "The application will close, update itself and restart. Your settings (Engine\\Config\\appsettings.json) are kept.",
-                AppInfo.ProductName, MessageBoxButtons.YesNo, MessageBoxIcon.Question);
-            if (answer != DialogResult.Yes) return;
             ReleaseInfo rel = availableUpdate;
             Enabled = false;
             try
             {
-                logger.Log("Downloading " + rel.ZipName + "...");
-                string zip = await Task.Run(() => UpdateService.DownloadAndVerify(rel));
-                logger.Log("Download verified (SHA256). Starting the updater...");
-                UpdateService.LaunchUpdater(zip, AppInfo.AppDirectory, Application.ExecutablePath);
+                logger.Log("Downloading " + rel.Tag + "...");
+                Version v = null;
+                string staged = await Task.Run(() => UpdateService.DownloadAndVerify(rel, out v));
+                Enabled = true;
+                if (!ConfirmInstall(v, "The download was verified (SHA256).")) return;
+                logger.Log("Installing " + rel.Tag + "...");
+                UpdateService.InstallAndRestart(staged);
                 Close();
             }
             catch (Exception ex)

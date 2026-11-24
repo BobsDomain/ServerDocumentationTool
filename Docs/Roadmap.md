@@ -28,6 +28,7 @@ Candidates that are still open (data already collected unless noted):
 - Report size: Installed Roles and Features (7% of an average report in the field test).
 - ISO dates for OS install/last boot.
 
+- **v2.0.0:** native rebuild: one exe, no PowerShell engine, no WinRM or RSAT (WMI/DCOM, Remote Registry, admin share, LDAP, DHCP API); same report; settings in %ProgramData%; `--render` rebuilds reports from RawData; self-replacing update.
 - **v0.9.9i:** locked as baseline 2026-11-17 after the field test on 153 servers.
 - **v1.1.0:** Update from File (offline servers); DNS read through the WMI provider with a hard 120 s limit; Discover Domain skips disabled, cluster-name and stale accounts and logs them.
 - **v1.0.3:** repository moved to bobsdomain/ServerDocumentationTool; installed copies are redirected (the old setting is translated).
@@ -35,11 +36,12 @@ Candidates that are still open (data already collected unless noted):
 - **v1.0.1:** renamed to Server Documentation Tool (visible names; file names kept for update compatibility).
 - **v1.0.0:** the Windows app (C# .NET Framework 4.8, built by GitHub Actions): Cancel, parallel collection, hard per-server time limit, update button, reusable remoting session per server, local server recognised by FQDN.
 
-## Candidates after v1.0.0 (owner approval needed)
-- Skip WinRM-only steps immediately on DCOM-only servers; reuse the probe's protocol (one connection attempt per server). (Reusable WinRM session done in v1.0.0.)
-- Rebuild Reports from RawData (no re-collection).
+## Candidates after v2.0.0 (owner approval needed)
+- "Rebuild Reports" button in the window for the `--render` mode (done as a command-line mode in v2.0.0).
 - HTML fleet summary (OS, platform, roles, patch status, low space, expiring certificates per server).
-- Config clean-up: wire up or remove the unused keys (DefaultParallelLimit, DefaultDocTitle, IncludeRawJson, IncludeHtmlSummary, IncludeDocx, IncludeApplications, IncludeCertificates, SkipEmptyReports, CertificateExpiringDays, DocumentTemplate, ReachabilityPingCount) and the template file.
+- Roles and Features table: Role vs Feature type and short names for all `Win32_ServerFeature` IDs (v2.0.0 shows "Role or Feature" / "Role Service").
+- IIS state on servers without the IIS WMI provider.
+- Done in v2.0.0: WinRM no longer used (no WinRM-only steps); config clean-up (unused keys dropped with the PowerShell engine).
 
 ## Later
 - DOCX polish: cover page, table of contents, header/footer with page numbers, page breaks, landscape wide tables, document properties.

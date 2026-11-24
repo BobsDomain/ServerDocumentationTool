@@ -3,11 +3,12 @@ using System.IO;
 using System.Text;
 using System.Windows.Forms;
 
-namespace IABB.App
+namespace ServerDocumentationTool
 {
-    /// <summary>Writes to the log pane and, during a run, to &lt;run folder&gt;\IABB_Run.log. Safe to call from any thread.</summary>
+    /// <summary>Writes to the log pane and, during a run, to &lt;run folder&gt;\ServerDocumentation_Run.log. Safe to call from any thread.</summary>
     internal sealed class RunLogger
     {
+        internal const string FileName = "ServerDocumentation_Run.log";
         private readonly TextBox box;
         private readonly object fileLock = new object();
         private static readonly Encoding Utf8NoBom = new UTF8Encoding(false);
@@ -33,6 +34,7 @@ namespace IABB.App
                     try { File.AppendAllText(filePath, line, Utf8NoBom); } catch { }
                 }
             }
+            if (box == null) return;
             try
             {
                 if (box.IsDisposed) return;
