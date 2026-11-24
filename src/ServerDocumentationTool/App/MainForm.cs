@@ -27,6 +27,7 @@ namespace ServerDocumentationTool
         private Credential credential;
         private string lastOutputFolder;
         private ReleaseInfo availableUpdate;
+        private readonly List<string> discoveryLog = new List<string>(); // v2.0.1: copied into the run log
 
         // controls
         private readonly TextBox txtClient = new TextBox();
@@ -349,7 +350,14 @@ namespace ServerDocumentationTool
             {
                 var found = await Task.Run(() => Discovery.DomainServers(filter, staleDays));
                 var skipped = found.Where(o => o.Skipped).ToList();
-                foreach (var sk in skipped) logger.Log("  Skipped " + sk.ServerName + ": " + sk.SkipReason);
+                discoveryLog.Clear();
+                discoveryLog.Add(string.Format("Discover Domain at {0:yyyy-MM-dd HH:mm} (filter '{1}', DiscoveryStaleDays {2}): {3} computer object(s) found, {4} skipped.", DateTime.Now, filter, staleDays, found.Count, skipped.Count));
+                foreach (var sk in skipped)
+                {
+                    string line = "  Skipped " + sk.ServerName + ": " + sk.SkipReason;
+                    logger.Log(line);
+                    discoveryLog.Add(line);
+                }
                 int n = AddServerRows(found.Where(o => !o.Skipped).Select(o => o.ServerName), "Active Directory");
                 logger.Log(string.Format("Added {0} server(s) from Active Directory; skipped {1} (listed above). Set DiscoveryStaleDays to 0 in the settings file to include stale accounts.", n, skipped.Count));
             }
@@ -448,6 +456,7 @@ namespace ServerDocumentationTool
                 logger.Log(string.Format("{0} {1} - run started by {2}\\{3} on {4}", AppInfo.ProductName, AppInfo.VersionText, Environment.UserDomainName, Environment.UserName, Environment.MachineName));
                 logger.Log(string.Format("Client: {0} | Credentials: {1} | servers at once: {2} | connect limit {3}s | WMI query limit {4}s | step limit {5}s | server limit {6} min",
                     s.ClientName, s.Credential != null ? s.Credential.FullUser : "current user", s.ParallelServers, s.ConnectTimeoutSec, s.WmiQueryTimeoutSec, s.SectionTimeoutSec, s.ServerTimeLimitMinutes));
+                foreach (string line in discoveryLog) logger.Log(line);
                 logger.Log(string.Format("Servers ({0}): {1}", names.Count, string.Join(", ", names)));
                 foreach (var r in rows) { r.Cells["Status"].Value = "Queued"; r.Cells["Result"].Value = ""; SetRowColour(r, SystemColors.Window); }
 

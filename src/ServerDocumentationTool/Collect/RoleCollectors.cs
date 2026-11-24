@@ -311,6 +311,23 @@ namespace ServerDocumentationTool.Collect
             return a != null ? a.Value : fallback;
         }
 
+        /// <summary>APP_POOL_WAS "Current Application Pool State" (1 uninitialised, 2 initialised, 3 running, 4 disabling,
+        /// 5 disabled, 6 shutdown pending, 7 delete pending) as a GetState value (0 starting, 1 started, 2 stopping, 3 stopped).</summary>
+        internal static int PoolCounterState(object v)
+        {
+            switch (N.ToInt(v))
+            {
+                case 3: return 1;
+                case 5: return 3;
+                case 1:
+                case 2: return 0;
+                case 4:
+                case 6:
+                case 7: return 2;
+                default: return 4;
+            }
+        }
+
         private static string StateText(object rv)
         {
             switch (N.S(rv))
@@ -331,7 +348,7 @@ namespace ServerDocumentationTool.Collect
             {
                 try
                 {
-                    var v = reg.Values(@"SOFTWARE\Microsoft\InetStp");
+                    var v = reg.Values(@"SOFTWARE\Microsoft\InetStp", new[] { "MajorVersion", "MinorVersion" });
                     object maj, min;
                     if (v.TryGetValue("MajorVersion", out maj)) r["Version"] = N.S(maj) + "." + (v.TryGetValue("MinorVersion", out min) ? N.S(min) : "0");
                 }
@@ -359,7 +376,25 @@ namespace ServerDocumentationTool.Collect
                     siteStates = wmi.InvokeEach("root\\WebAdministration", "SELECT Name FROM Site", "Name", "GetState", 60);
                     poolStates = wmi.InvokeEach("root\\WebAdministration", "SELECT Name FROM ApplicationPool", "Name", "GetState", 60);
                 }
-                catch { ((List<object>)r["Notes"]).Add("IIS site and application pool state not available (the IIS WMI provider is not installed on the server); state shows Unknown."); }
+                catch
+                {
+                    // v2.0.1: without the IIS WMI provider (53 of 123 sites showed Unknown in the v2.0.0 field test), the state
+                    // comes from the IIS performance counters, which are present whenever IIS is installed.
+                    siteStates = null; poolStates = null;
+                    try
+                    {
+                        poolStates = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+                        foreach (var x in wmi.Query("SELECT Name, CurrentApplicationPoolState FROM Win32_PerfFormattedData_APPPOOLCountersProvider_APPPOOLWAS", "root\\cimv2", 60))
+                            poolStates[N.S(x, "Name")] = PoolCounterState(N.Get(x, "CurrentApplicationPoolState"));
+                        siteStates = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+                        foreach (var x in wmi.Query("SELECT Name, ServiceUptime FROM Win32_PerfFormattedData_W3SVC_WebService", "root\\cimv2", 60))
+                            if (N.S(x, "Name") != "_Total") siteStates[N.S(x, "Name")] = N.ToInt(N.Get(x, "ServiceUptime")) > 0 ? 1 : 3;
+                        r["StateSource"] = "IIS performance counters";
+                    }
+                    catch { }
+                    if ((poolStates == null || poolStates.Count == 0) && (siteStates == null || siteStates.Count == 0))
+                        ((List<object>)r["Notes"]).Add("IIS site and application pool state not available (no IIS WMI provider and no IIS performance counters on the server); state shows Unknown.");
+                }
                 ParseIisConfig(text, siteStates, poolStates, r);
                 r["Success"] = true;
             }
@@ -417,6 +452,8 @@ namespace ServerDocumentationTool.Collect
                     }
                 }
             }
+            // Application pools by name, as IIS Manager and the v1.x report list them.
+            poolRows = poolRows.OrderBy(x => N.S(x, "Name"), StringComparer.Create(CultureInfo.InvariantCulture, true)).ToList();
             r["Sites"] = siteRows; r["Bindings"] = bindRows; r["AppPools"] = poolRows; r["VirtualDirectories"] = vdirRows;
         }
     }

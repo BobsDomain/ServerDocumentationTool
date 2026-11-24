@@ -68,7 +68,11 @@ namespace ServerDocumentationTool
                         check(File.Exists(again) && DocxText(again) == DocxText(docPath), "JSON renders to the same document (--render path)");
                     }
 
-                    foreach (var e in expect ?? new List<KeyValuePair<string, string>>()) check(Expect(o.Result, e.Key, e.Value), "expected " + e.Key + " = " + e.Value);
+                    foreach (var e in expect ?? new List<KeyValuePair<string, string>>())
+                    {
+                        if (e.Key.Equals("remote-registry", StringComparison.OrdinalIgnoreCase)) RemoteRegistryCheck(check, write);
+                        else check(Expect(o.Result, e.Key, e.Value), "expected " + e.Key + " = " + e.Value);
+                    }
 
                     string html = Path.Combine(outDir, "SelfTest_Server_Summary.html");
                     RunFiles.WriteSummary(new[] { o }, html, "SelfTest");
@@ -83,6 +87,36 @@ namespace ServerDocumentationTool
             write(fails == 0 ? "SELFTEST PASSED" : "SELFTEST FAILED (" + fails + ")");
             try { File.WriteAllText(Path.Combine(outDir, "selftest.log"), log.ToString()); } catch { }
             return fails == 0 ? 0 : 1;
+        }
+
+        /// <summary>
+        /// v2.0.1: reads this machine through the Remote Registry service (the code path used for every other server) and
+        /// compares the applications and certificates with the local read. Needs the RemoteRegistry service running.
+        /// </summary>
+        private static void RemoteRegistryCheck(Action<bool, string> check, Action<string> write)
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var remote = Collect.NativeReader.Remote(Environment.MachineName, null);
+            var local = Collect.NativeReader.Local();
+            var asRemote = new Collect.Target { ComputerName = Environment.MachineName, IsLocal = false };
+            var appsRemote = Collect.Inventory.Applications(asRemote, remote);
+            var appsLocal = Collect.Inventory.Applications(asRemote, local);
+            int nr = N.Items(appsRemote, "Applications").Count + N.Items(appsRemote, "HiddenEntries").Count;
+            int nl = N.Items(appsLocal, "Applications").Count + N.Items(appsLocal, "HiddenEntries").Count;
+            write("  remote registry: " + nr + " uninstall entries remote, " + nl + " local, " + sw.Elapsed.TotalSeconds.ToString("0.0") + " s");
+            check(N.IsTrue(appsRemote["Success"]) && nr > 0 && nr == nl, "applications through the Remote Registry service match the local read");
+            var certsRemote = Collect.Inventory.Certificates(asRemote, remote);
+            var certsLocal = Collect.Inventory.Certificates(new Collect.Target { ComputerName = Environment.MachineName, IsLocal = true }, local);
+            check(N.IsTrue(certsRemote["Success"]) && N.Items(certsRemote, "Certificates").Count > 0, "certificates read from the registry");
+            foreach (string st in new[] { "My", "Root", "CA", "WebHosting" })
+            {
+                var r = N.Items(certsRemote, "Certificates").Where(c => N.S(c, "Store") == st).Select(c => N.S(c, "Thumbprint")).OrderBy(x => x).ToList();
+                var l = N.Items(certsLocal, "Certificates").Where(c => N.S(c, "Store") == st).Select(c => N.S(c, "Thumbprint")).OrderBy(x => x).ToList();
+                write("  remote registry: store " + st + ": " + r.Count + " from the registry, " + l.Count + " in the certificate store" + (r.SequenceEqual(l) ? "" : " (differs)"));
+                if (st == "My") check(r.SequenceEqual(l), "Personal (My) certificates from the registry match the certificate store");
+            }
+            var missing = remote.SubKeys(@"SOFTWARE\NoSuchKey_ServerDocumentationTool");
+            check(missing.Length == 0, "a missing key reads as empty, not as an error");
         }
 
         private static bool Expect(Dictionary<string, object> r, string key, string value)

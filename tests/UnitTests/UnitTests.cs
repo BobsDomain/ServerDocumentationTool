@@ -10,7 +10,8 @@ using ServerDocumentationTool.Report;
 internal sealed class FakeReg : IRegistryReader
 {
     public readonly Dictionary<string, Dictionary<string, object>> Keys = new Dictionary<string, Dictionary<string, object>>(StringComparer.OrdinalIgnoreCase);
-    public string Method { get { return "Fake"; } }
+    public string MethodName = "Fake";
+    public string Method { get { return MethodName; } }
     public void Put(string path, params object[] kv)
     {
         var d = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
@@ -20,15 +21,26 @@ internal sealed class FakeReg : IRegistryReader
         string p = path;
         while (p.Contains("\\")) { p = p.Substring(0, p.LastIndexOf('\\')); if (!Keys.ContainsKey(p)) Keys[p] = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase); }
     }
-    public bool KeyExists(string path) { return Keys.ContainsKey(path); }
+    public int Calls;
+    public int Parallelism { get { return 4; } }
     public string[] SubKeys(string path)
     {
         string pre = path + "\\";
         return Keys.Keys.Where(k => k.StartsWith(pre, StringComparison.OrdinalIgnoreCase) && k.IndexOf('\\', pre.Length) < 0).Select(k => k.Substring(pre.Length)).ToArray();
     }
-    public string[] ValueNames(string path) { Dictionary<string, object> d; return Keys.TryGetValue(path, out d) ? d.Keys.ToArray() : new string[0]; }
-    public object Value(string path, string name) { Dictionary<string, object> d; object v; return Keys.TryGetValue(path, out d) && d.TryGetValue(name, out v) ? v : null; }
-    public Dictionary<string, object> Values(string path) { Dictionary<string, object> d; return Keys.TryGetValue(path, out d) ? new Dictionary<string, object>(d, StringComparer.OrdinalIgnoreCase) : new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase); }
+    public Dictionary<string, object> AllValues(string path) { Dictionary<string, object> d; return Keys.TryGetValue(path, out d) ? new Dictionary<string, object>(d, StringComparer.OrdinalIgnoreCase) : new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase); }
+    public Dictionary<string, object> Values(string path, IList<string> names, bool stopIfFirstMissing = false)
+    {
+        var all = AllValues(path); var d = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < names.Count; i++)
+        {
+            System.Threading.Interlocked.Increment(ref Calls);
+            object v;
+            if (all.TryGetValue(names[i], out v)) d[names[i]] = v;
+            else if (i == 0 && stopIfFirstMissing) return d;
+        }
+        return d;
+    }
 }
 
 internal static class UnitTests
@@ -56,6 +68,7 @@ internal static class UnitTests
         Eq("CONTOSO\\Domain Admins", ServerCollector.MemberName("WinNT://CONTOSO/Domain Admins", "SRV01"), "member domain");
         Eq("NT AUTHORITY\\INTERACTIVE", ServerCollector.MemberName("WinNT://NT AUTHORITY/INTERACTIVE", "SRV01"), "member well-known");
         Eq("OTHER\\SRV02", ServerCollector.MemberName("WinNT://OTHER/SRV02", "SRV01"), "member computer account");
+        Eq("lss", ServerCollector.MemberName("WinNT://SRV01/lss", "SRV01"), "member local account read remotely (v2.0.1)");
         // volumes and associations
         Eq("Mounted Volume|C:", string.Join("|", ServerCollector.VolumeClass("C:", "C:\\", "C:\\").Take(2)), "volume letter");
         Eq("Mount Point (folder)|D:\\Mounts\\Data\\", string.Join("|", ServerCollector.VolumeClass(null, "D:\\Mounts\\Data\\", null).Take(2)), "volume mount point");
@@ -74,8 +87,9 @@ internal static class UnitTests
         Eq("10.1.2.254", RoleCollectors.Ip(0x0A0102FE), "dhcp ip 2");
 
         // certificates from a registry blob
-        string fn; bool key;
-        byte[] der = Inventory.ParseBlob(File.ReadAllBytes(Path.Combine(dir, "cert-blob.bin")), out fn, out key);
+        string fn; bool key, archived;
+        byte[] der = Inventory.ParseBlob(File.ReadAllBytes(Path.Combine(dir, "cert-blob.bin")), out fn, out key, out archived);
+        True(!archived, "blob not archived");
         True(der != null, "blob has certificate");
         Eq("Web cert", fn, "blob friendly name"); True(key, "blob private key flag");
         var reg = new FakeReg();
@@ -92,6 +106,20 @@ internal static class UnitTests
         Eq(Math.Round((nb - DateTime.Now).TotalDays, 0), N.Get(c0, "DaysUntilExpiry"), "cert days until expiry");
         var rows = Rules.CertificateRows(certs);
         Eq("Web cert|My|OK", rows[0][0] + "|" + rows[0][1] + "|" + rows[0][3], "cert report row");
+        // v2.0.1: archived (renewed) certificates are left out, as Windows does
+        byte[] blobBytes = File.ReadAllBytes(Path.Combine(dir, "cert-blob.bin"));
+        byte[] archivedBlob = new byte[12 + blobBytes.Length];
+        BitConverter.GetBytes(19).CopyTo(archivedBlob, 0); BitConverter.GetBytes(1).CopyTo(archivedBlob, 4); BitConverter.GetBytes(0).CopyTo(archivedBlob, 8);
+        blobBytes.CopyTo(archivedBlob, 12);
+        Inventory.ParseBlob(archivedBlob, out fn, out key, out archived);
+        True(archived, "archived property detected");
+        reg.Put(@"SOFTWARE\Microsoft\SystemCertificates\My\Certificates\0000000000000000000000000000000000000001", "Blob", archivedBlob);
+        Eq(1, N.Items(Inventory.Certificates(remote, reg), "Certificates").Count, "archived certificate not listed");
+        // v2.0.1: no certificates from the first reader -> read again through the fallback reader
+        var emptyReg = new FakeReg { MethodName = "Empty reader" };
+        var fb = Inventory.Certificates(remote, emptyReg, () => reg);
+        Eq(1, N.Items(fb, "Certificates").Count, "certificate fallback reader used");
+        Eq(1, N.Items(fb, "Notes").Count, "certificate fallback noted");
 
         // applications from the uninstall keys
         reg = new FakeReg();
@@ -109,6 +137,42 @@ internal static class UnitTests
         Eq("32-bit", N.Get(N.Items(apps, "Applications")[1], "Architecture"), "apps architecture");
         Eq(3, N.Items(apps, "HiddenEntries").Count, "apps hidden (system component, update, child)");
         Eq(2, N.Path(apps, "Summary", "Publishers"), "apps publishers");
+        Eq(7 * 6 + 1, reg.Calls, "apps read only the needed values (key without DisplayName stops after one)");
+
+        // printers from the registry (fallback when Win32_Printer is slow)
+        reg = new FakeReg();
+        string pr = @"SYSTEM\CurrentControlSet\Control\Print\Printers";
+        reg.Put(pr + "\\HP Floor 2", "Name", "HP Floor 2", "Printer Driver", "HP Universal", "Port", "IP_10.0.0.5", "Share Name", "HPF2", "Location", "Floor 2", "Attributes", 8 | 0x40);
+        reg.Put(pr + "\\Local PDF", "Name", "Local PDF", "Printer Driver", "PDF", "Port", "FILE:", "Attributes", 4);
+        var prn = ServerCollector.PrintersFromRegistry(reg);
+        Eq("HP Floor 2|HP Universal|IP_10.0.0.5|True|HPF2|Floor 2|False", string.Join("|", new[] { "Name", "DriverName", "PortName", "Shared", "ShareName", "Location", "Default" }.Select(k => N.S(prn[0], k))), "printer from registry (shared)");
+        Eq("False|True", N.S(prn[1], "Shared") + "|" + N.S(prn[1], "Default"), "printer from registry (default, not shared)");
+
+        // parallel map: order kept, errors collected, all items run
+        var errs = new List<Exception>();
+        var pm = RegistryAccess.ParallelMap(Enumerable.Range(0, 50).ToList(), 8, i => { if (i == 7) throw new InvalidOperationException("x"); System.Threading.Thread.Sleep(5); return i * 2; }, errs);
+        Eq("0|2|12|0|98", pm[0] + "|" + pm[1] + "|" + pm[6] + "|" + pm[7] + "|" + pm[49], "parallel map results in order");
+        Eq(1, errs.Count, "parallel map error collected");
+
+        // registry value decoding
+        Eq("abc", NativeReader.Decode(1, System.Text.Encoding.Unicode.GetBytes("abc\0"), 8), "decode REG_SZ");
+        Eq("%SystemDrive%\\x", NativeReader.Decode(2, System.Text.Encoding.Unicode.GetBytes("%SystemDrive%\\x\0"), 32), "decode REG_EXPAND_SZ not expanded");
+        Eq("a|bc", string.Join("|", (string[])NativeReader.Decode(7, System.Text.Encoding.Unicode.GetBytes("a\0bc\0\0"), 12)), "decode REG_MULTI_SZ");
+        Eq(1433, NativeReader.Decode(4, BitConverter.GetBytes(1433), 4), "decode REG_DWORD");
+        Eq(5000000000L, NativeReader.Decode(11, BitConverter.GetBytes(5000000000L), 8), "decode REG_QWORD");
+
+        // IIS pool state from performance counters
+        Eq("1|3|2|0", RoleCollectors.PoolCounterState(3) + "|" + RoleCollectors.PoolCounterState(5) + "|" + RoleCollectors.PoolCounterState(4) + "|" + RoleCollectors.PoolCounterState(2), "iis pool counter states");
+
+        // a step that reaches its time limit keeps what it collected; later writes are ignored
+        var so = new StepOut();
+        so.Set["Printers"] = new List<object> { "p" }; so.Warn("w1");
+        List<KeyValuePair<string, object>> sv; List<string> sw2;
+        so.Seal(out sv, out sw2);
+        so.Set["PageFiles"] = 1; so.Warn("late");
+        Eq("Printers|w1", string.Join(",", sv.Select(kv => kv.Key)) + "|" + string.Join(",", sw2), "sealed step output keeps data");
+        List<KeyValuePair<string, object>> sv2; List<string> sw3; so.Seal(out sv2, out sw3);
+        Eq(1, sv2.Count, "writes after seal ignored");
 
         // SQL from the registry
         reg = new FakeReg();
@@ -134,7 +198,8 @@ internal static class UnitTests
         Eq("Intranet|2|Unknown|D:\\Web\\Intranet|IntranetPool", string.Join("|", new[] { "Name", "ID", "State", "PhysicalPath", "AppPool" }.Select(k => N.S(N.Items(iis, "Sites")[1], k))), "iis second site");
         Eq("http|*:80:|", string.Join("|", new[] { "Protocol", "BindingInformation", "Hostname" }.Select(k => N.S(N.Items(iis, "Bindings")[0], k))), "iis binding");
         Eq("https|*:443:intranet.contoso.local|intranet.contoso.local|1", string.Join("|", new[] { "Protocol", "BindingInformation", "Hostname", "SslFlags" }.Select(k => N.S(N.Items(iis, "Bindings")[2], k))), "iis https binding");
-        Eq("DefaultAppPool|Started|v4.0|Integrated|ApplicationPoolIdentity", string.Join("|", new[] { "Name", "State", "ManagedRuntimeVersion", "ManagedPipelineMode", "Identity" }.Select(k => N.S(N.Items(iis, "AppPools")[0], k))), "iis default pool");
+        Eq("ArdentWebServices|Classic .NET AppPool|DefaultAppPool|IntranetPool", string.Join("|", N.Items(iis, "AppPools").Select(x => N.S(x, "Name"))), "iis pools sorted by name (v2.0.1)");
+        Eq("DefaultAppPool|Started|v4.0|Integrated|ApplicationPoolIdentity", string.Join("|", new[] { "Name", "State", "ManagedRuntimeVersion", "ManagedPipelineMode", "Identity" }.Select(k => N.S(N.Items(iis, "AppPools")[2], k))), "iis default pool");
         Eq("Classic .NET AppPool|Stopped|v2.0|Classic|NetworkService", string.Join("|", new[] { "Name", "State", "ManagedRuntimeVersion", "ManagedPipelineMode", "Identity" }.Select(k => N.S(N.Items(iis, "AppPools")[1], k))), "iis classic pool");
         Eq("Default Web Site|/ArdentWebServices|C:\\Ardent\\WebSites\\ArdentWebServices|ArdentWebServices", string.Join("|", new[] { "Site", "Path", "PhysicalPath", "AppPool" }.Select(k => N.S(N.Items(iis, "VirtualDirectories")[0], k))), "iis application");
         Eq(1, N.Items(iis, "VirtualDirectories").Count, "iis applications (root apps excluded)");

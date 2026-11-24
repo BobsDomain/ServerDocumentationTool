@@ -14,13 +14,43 @@ using ServerDocumentationTool.Common;
 namespace ServerDocumentationTool.Collect
 {
     /// <summary>What a step produced. Merged into the server result only when the step finished in time, so a step
-    /// abandoned at its time limit can never change the result while it is being saved.</summary>
+    /// abandoned at its time limit can never change the result while it is being saved.
+    /// v2.0.1: thread-safe; when a step reaches its time limit the output is sealed and what it holds is kept
+    /// (v2.0.0 dropped it, so a slow server lost its printers, groups, page file and environment).</summary>
     internal sealed class StepOut
     {
-        public readonly Dictionary<string, object> Set = N.New();
-        public readonly List<string> Warnings = new List<string>();
+        private readonly object gate = new object();
+        private readonly Dictionary<string, object> set = N.New();
+        private readonly List<string> warnings = new List<string>();
+        private bool closed;
+        public readonly SetView Set;
         public string Result; // null = OK unless set
-        public void Warn(string w) { Warnings.Add(w); }
+
+        public StepOut() { Set = new SetView(this); }
+
+        public void Warn(string w) { lock (gate) { if (!closed) warnings.Add(w); } }
+
+        /// <summary>Stops further changes and returns what the step produced so far.</summary>
+        public void Seal(out List<KeyValuePair<string, object>> values, out List<string> warns)
+        {
+            lock (gate)
+            {
+                closed = true;
+                values = set.ToList();
+                warns = warnings.ToList();
+            }
+        }
+
+        public sealed class SetView
+        {
+            private readonly StepOut o;
+            internal SetView(StepOut o) { this.o = o; }
+            public object this[string key]
+            {
+                get { lock (o.gate) { object v; return o.set.TryGetValue(key, out v) ? v : null; } }
+                set { lock (o.gate) { if (!o.closed) o.set[key] = value; } }
+            }
+        }
     }
 
     /// <summary>
@@ -30,7 +60,7 @@ namespace ServerDocumentationTool.Collect
     /// </summary>
     internal sealed class ServerCollector
     {
-        internal const string SchemaVersion = "2.0.0";
+        internal const string SchemaVersion = "2.0.1";
         private const double GB = 1073741824.0;
 
         private readonly Target t;
@@ -99,21 +129,20 @@ namespace ServerDocumentationTool.Collect
             Progress(name);
             var sw = Stopwatch.StartNew();
             string res = "OK";
-            StepOut o = null;
+            var o = new StepOut();
+            bool merge = true;
             try
             {
-                o = Hard.Run(() => { var x = new StepOut(); body(x); return x; }, t.SectionTimeoutSec, "Step '" + name + "'");
+                Hard.Run(() => body(o), t.SectionTimeoutSec, "Step '" + name + "'");
             }
             catch (HardTimeoutException)
             {
                 res = "Timed out";
-                Warn("Step '" + name + "' timed out after " + t.SectionTimeoutSec + " seconds.");
-            }
-            catch (StepFailedException ex)
-            {
-                res = "Failed";
-                if (ex.Out != null) Merge(ex.Out);
-                Warn("Step '" + name + "' failed: " + ex.Message);
+                merge = false;
+                List<KeyValuePair<string, object>> partial; List<string> partialWarnings;
+                o.Seal(out partial, out partialWarnings);
+                Merge(partial, partialWarnings);
+                Warn("Step '" + name + "' timed out after " + t.SectionTimeoutSec + " seconds." + (partial.Count > 0 ? " Data collected before the time limit is shown." : string.Empty));
             }
             catch (Exception ex)
             {
@@ -121,29 +150,29 @@ namespace ServerDocumentationTool.Collect
                 Warn("Step '" + name + "' failed: " + Wmi.Describe(ex));
             }
             sw.Stop();
-            if (o != null)
+            if (merge)
             {
-                Merge(o);
-                if (o.Result != null) res = o.Result;
+                List<KeyValuePair<string, object>> values; List<string> warns;
+                o.Seal(out values, out warns);
+                Merge(values, warns);
+                if (o.Result != null && res == "OK") res = o.Result;
             }
             timings.Add(N.Node("Section", name, "Seconds", Math.Round(sw.Elapsed.TotalSeconds, 1), "Result", res));
         }
 
-        private void Merge(StepOut o)
+        private void Merge(List<KeyValuePair<string, object>> values, List<string> warns)
         {
-            foreach (var kv in o.Set)
+            foreach (var kv in values)
             {
                 if (kv.Key.StartsWith("RoleData.", StringComparison.Ordinal)) ((Dictionary<string, object>)r["RoleData"])[kv.Key.Substring(9)] = kv.Value;
                 else r[kv.Key] = kv.Value;
             }
-            foreach (string w in o.Warnings) warnings.Add(w);
+            foreach (string w in warns) warnings.Add(w);
         }
 
-        /// <summary>Thrown by a step body that failed after producing some data (the data is kept).</summary>
-        private sealed class StepFailedException : Exception
+        private static void AddNotes(StepOut o, Dictionary<string, object> x)
         {
-            public readonly StepOut Out;
-            public StepFailedException(string message, StepOut o) : base(message) { Out = o; }
+            foreach (object n in N.Items(x, "Notes")) if (!string.IsNullOrWhiteSpace(N.S(n))) o.Warn(N.S(n));
         }
 
         /// <summary>Port of Set-IABBStepOutcome.</summary>
@@ -224,20 +253,22 @@ namespace ServerDocumentationTool.Collect
                 if (roles.Contains("Domain Controller")) RoleStep("Active Directory", "ADDS", () => RoleCollectors.Adds(t));
                 if (roles.Contains("DNS Server")) RoleStep("DNS Server", "DNS", () => RoleCollectors.Dns(t, wmi));
                 if (roles.Contains("DHCP Server")) RoleStep("DHCP Server", "DHCP", () => RoleCollectors.Dhcp(t));
-                if (roles.Contains("IIS Server")) Step("IIS", o => { var x = RoleCollectors.Iis(t, wmi, Registry()); o.Set["RoleData.IIS"] = x; Outcome(o, x, "IIS"); });
+                if (roles.Contains("IIS Server")) Step("IIS", o => { var x = RoleCollectors.Iis(t, wmi, Registry()); o.Set["RoleData.IIS"] = x; Outcome(o, x, "IIS"); AddNotes(o, x); });
                 if (roles.Contains("SQL Server")) Step("SQL Server", SqlStep);
                 Step("Installed applications", o =>
                 {
                     var x = Inventory.Applications(t, Registry());
                     o.Set["Applications"] = x;
                     Outcome(o, x, "Applications inventory");
+                    AddNotes(o, x);
                     if (N.IsTrue(x["Success"])) StepData(o, "Applications inventory", N.Items(x, "Applications").Concat(N.Items(x, "HiddenEntries")).ToList());
                 });
                 Step("Certificates", o =>
                 {
-                    var x = Inventory.Certificates(t, Registry());
+                    var x = Inventory.Certificates(t, Registry(), () => Registry() is WmiReader ? null : new WmiReader(wmi, t.OperationTimeoutSec));
                     o.Set["Certificates"] = x;
                     Outcome(o, x, "Certificates inventory");
+                    AddNotes(o, x);
                     if (N.IsTrue(x["Success"])) StepData(o, "Certificates inventory", N.Items(x, "Certificates"));
                 });
                 foreach (string n in registryNotes.Distinct()) Warn(n);
@@ -569,13 +600,23 @@ namespace ServerDocumentationTool.Collect
             else if (spoolKnown && N.S(spool, "State") != "Running") o.Set["PrintersNote"] = "The Print Spooler service is " + N.S(spool, "State") + " (" + N.S(spool, "StartMode") + "), so no printers are available on this server.";
             else
             {
+                // v2.0.1: Win32_Printer is slow over DCOM on print servers with many queues (seen in the v2.0.0 field
+                // test). After 60 s the list is read from the spooler's registry key instead.
                 try
                 {
-                    o.Set["Printers"] = wmi.Query("SELECT * FROM Win32_Printer").Select(p => (object)N.Node("Name", N.S(p, "Name"),
+                    o.Set["Printers"] = wmi.Query("SELECT * FROM Win32_Printer", "root\\cimv2", 60).Select(p => (object)N.Node("Name", N.S(p, "Name"),
                         "DriverName", N.S(p, "DriverName"), "PortName", N.S(p, "PortName"), "Shared", N.S(p, "Shared"), "ShareName", N.S(p, "ShareName"),
                         "Location", N.S(p, "Location"), "Default", N.S(p, "Default"))).ToList();
                 }
-                catch (Exception ex) { o.Warn("Printers: " + Wmi.Describe(ex)); }
+                catch (Exception ex)
+                {
+                    try
+                    {
+                        o.Set["Printers"] = PrintersFromRegistry(Registry());
+                        o.Warn("Printers: the WMI printer query did not complete (" + Wmi.Describe(ex) + "); the printer list was read from the registry.");
+                    }
+                    catch (Exception ex2) { o.Warn("Printers: " + Wmi.Describe(ex) + "; registry: " + Wmi.Describe(ex2)); }
+                }
             }
             try
             {
@@ -616,20 +657,25 @@ namespace ServerDocumentationTool.Collect
             {
                 string filter = isDC ? "LocalAccount=True AND SID LIKE 'S-1-5-32-%'" : "LocalAccount=True AND Domain=" + q;
                 var groups = wmi.Query("SELECT Name, Description, SID FROM Win32_Group WHERE " + filter).OrderBy(g => N.S(g, "Name"), Sort).ToList();
-                var rows = new List<object>(); int skipped = 0;
-                foreach (var g in groups)
+                // Listed straight away, so a step that reaches its time limit still shows the groups.
+                o.Set["LocalGroups"] = groups.Select(g => (object)N.Node("Name", N.S(g, "Name"), "Description", N.S(g, "Description"), "SID", N.S(g, "SID"),
+                    "MemberCount", string.Empty, "Members", "(member lookup did not finish - time limit reached)")).ToList();
+                o.Set["LocalAccountsCollected"] = true;
+                // v2.0.1: members are looked up 6 groups at a time (v2.0.0: one at a time, median 36 s, up to 300 s per server).
+                int skipped = 0;
+                var rowsArr = RegistryAccess.ParallelMap(groups, 6, g =>
                 {
                     if (sw.Elapsed.TotalSeconds >= budget)
                     {
-                        skipped++;
-                        rows.Add(N.Node("Name", N.S(g, "Name"), "Description", N.S(g, "Description"), "SID", N.S(g, "SID"), "MemberCount", string.Empty, "Members", "(member lookup skipped - time limit reached)"));
-                        continue;
+                        Interlocked.Increment(ref skipped);
+                        return (object)N.Node("Name", N.S(g, "Name"), "Description", N.S(g, "Description"), "SID", N.S(g, "SID"), "MemberCount", string.Empty, "Members", "(member lookup skipped - time limit reached)");
                     }
                     List<string> members;
                     try { members = GroupMembers(N.S(g, "Name"), nb); }
                     catch (Exception ex) { members = new List<string> { "(member lookup failed: " + ex.Message.Trim() + ")" }; }
-                    rows.Add(N.Node("Name", N.S(g, "Name"), "Description", N.S(g, "Description"), "SID", N.S(g, "SID"), "MemberCount", members.Count, "Members", string.Join(", ", members)));
-                }
+                    return (object)N.Node("Name", N.S(g, "Name"), "Description", N.S(g, "Description"), "SID", N.S(g, "SID"), "MemberCount", members.Count, "Members", string.Join(", ", members));
+                }, null);
+                var rows = rowsArr.ToList();
                 o.Set["LocalGroups"] = rows;
                 o.Set["LocalAccountsCollected"] = true;
                 if (skipped > 0) o.Warn("Local groups: member lookup skipped for " + skipped + " group(s) after reaching the time limit.");
@@ -637,12 +683,31 @@ namespace ServerDocumentationTool.Collect
             catch (Exception ex) { o.Warn("Local groups: " + Wmi.Describe(ex)); }
         }
 
+        /// <summary>Printers from HKLM\SYSTEM\CurrentControlSet\Control\Print\Printers (Attributes: 0x8 shared, 0x4 default).</summary>
+        internal static List<object> PrintersFromRegistry(IRegistryReader reg)
+        {
+            const string root = @"SYSTEM\CurrentControlSet\Control\Print\Printers";
+            var names = new[] { "Name", "Printer Driver", "Port", "Share Name", "Location", "Attributes" };
+            var keys = reg.SubKeys(root).OrderBy(x => x, Sort).ToList();
+            var vals = RegistryAccess.ParallelMap(keys, reg.Parallelism, k => reg.Values(root + "\\" + k, names), null);
+            var list = new List<object>();
+            for (int i = 0; i < keys.Count; i++)
+            {
+                var v = vals[i] ?? new Dictionary<string, object>();
+                Func<string, string> val = n => { object x; return v.TryGetValue(n, out x) ? N.S(x) : string.Empty; };
+                int attr = N.ToInt(val("Attributes"));
+                list.Add(N.Node("Name", val("Name").Length > 0 ? val("Name") : keys[i], "DriverName", val("Printer Driver"), "PortName", val("Port"),
+                    "Shared", (attr & 8) != 0 ? "True" : "False", "ShareName", val("Share Name"), "Location", val("Location"), "Default", (attr & 4) != 0 ? "True" : "False"));
+            }
+            return list;
+        }
+
         /// <summary>Members of a local group via ADSI WinNT (port of the [ADSI] lookup and Get-MemberName).</summary>
         private List<string> GroupMembers(string group, string netbios)
         {
             string host = t.IsLocal ? Environment.MachineName : t.ComputerName;
             Credential c = t.RemoteCredential;
-            int limit = Math.Max(30, t.OperationTimeoutSec);
+            int limit = 60;
             return Hard.Run(() =>
             {
                 var list = new List<string>();
@@ -669,6 +734,8 @@ namespace ServerDocumentationTool.Collect
             string p = Regex.Replace(adsPath ?? string.Empty, "^WinNT://", string.Empty, RegexOptions.IgnoreCase);
             string[] parts = p.Split('/');
             if (parts.Length >= 3 && string.Equals(parts[1], netbios, StringComparison.OrdinalIgnoreCase)) return parts[2];
+            // v2.0.1: read remotely, a local account's path has no domain part (WinNT://SERVER/user); show "user" as v1.x did.
+            if (parts.Length == 2 && string.Equals(parts[0], netbios, StringComparison.OrdinalIgnoreCase)) return parts[1];
             if (parts.Length == 2) return parts[0] + "\\" + parts[1];
             if (parts.Length >= 3) return parts[1] + "\\" + parts[2];
             return p;

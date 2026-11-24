@@ -28,6 +28,7 @@ Candidates that are still open (data already collected unless noted):
 - Report size: Installed Roles and Features (7% of an average report in the field test).
 - ISO dates for OS install/last boot.
 
+- **v2.0.1:** fixes from the v2.0.0 field test: fast registry reader (applications, certificates, SQL), archived certificates hidden, parallel group lookups, partial step data kept on timeout, printer registry fallback, IIS state from performance counters, discovery skip list in the run log.
 - **v2.0.0:** native rebuild: one exe, no PowerShell engine, no WinRM or RSAT (WMI/DCOM, Remote Registry, admin share, LDAP, DHCP API); same report; settings in %ProgramData%; `--render` rebuilds reports from RawData; self-replacing update.
 - **v0.9.9i:** locked as baseline 2026-11-17 after the field test on 153 servers.
 - **v1.1.0:** Update from File (offline servers); DNS read through the WMI provider with a hard 120 s limit; Discover Domain skips disabled, cluster-name and stale accounts and logs them.
@@ -40,7 +41,6 @@ Candidates that are still open (data already collected unless noted):
 - "Rebuild Reports" button in the window for the `--render` mode (done as a command-line mode in v2.0.0).
 - HTML fleet summary (OS, platform, roles, patch status, low space, expiring certificates per server).
 - Roles and Features table: Role vs Feature type and short names for all `Win32_ServerFeature` IDs (v2.0.0 shows "Role or Feature" / "Role Service").
-- IIS state on servers without the IIS WMI provider.
 - Done in v2.0.0: WinRM no longer used (no WinRM-only steps); config clean-up (unused keys dropped with the PowerShell engine).
 
 ## Later
